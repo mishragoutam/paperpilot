@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-background: #faf8ff;
+    --color-surface: #faf8ff;
+    --color-surface-container-low: #f2f3ff;
+    --color-surface-container: #eaedff;
+    --color-surface-container-high: #e2e7ff;
+    --color-surface-container-highest: #dae2fd;
+    --color-surface-container-lowest: #ffffff;
+    --color-on-surface: #131b2e;
+    --color-on-surface-variant: #464555;
+    --color-outline: #777587;
+    --color-outline-variant: #c7c4d8;
+    --color-primary: #3525cd;
+    --color-primary-container: #4f46e5;
+    --color-secondary: #4648d4;
+    --color-tertiary: #004d70;
+    --color-tertiary-fixed: #c9e6ff;
+    --color-inverse-surface: #283044;
+    --color-inverse-on-surface: #eef0ff;
+  }
+
+  .dark {
+    --color-background: #0f1422;
+    --color-surface: #0f1422;
+    --color-surface-container-low: #141a2c;
+    --color-surface-container: #1c243c;
+    --color-surface-container-high: #242f4c;
+    --color-surface-container-highest: #2d3a5e;
+    --color-surface-container-lowest: #0a0e19;
+    --color-on-surface: #eef0ff;
+    --color-on-surface-variant: #a8b0c8;
+    --color-outline: #737c98;
+    --color-outline-variant: #2b3652;
+    --color-primary: #857bfd;
+    --color-primary-container: #4538d6;
+    --color-secondary: #8f91ff;
+    --color-tertiary: #7cc2f6;
+    --color-tertiary-fixed: #1d3a54;
+    --color-inverse-surface: #eef0ff;
+    --color-inverse-on-surface: #131b2e;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    @apply bg-background font-body-ui text-body-ui text-on-surface antialiased select-none;
+  }
+  body {
+    overscroll-behavior: none;
+  }
+  main > :first-child {
+    margin-top: 0 !important;
+  }
+  main > :last-child {
+    margin-bottom: 0 !important;
+  }
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* Editor specific styles for Tiptap */
+.ProseMirror {
+  outline: none;
+}
+
+.ProseMirror p {
+  margin-bottom: 1em;
+  line-height: 1.75;
+}
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  font-family: "Source Serif 4", serif;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.ProseMirror h1 {
+  font-size: 2rem;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5rem;
+}
+
+.ProseMirror h3 {
+  font-size: 1.25rem;
+}
+
+.ProseMirror blockquote {
+  border-left: 3px solid #4d44e3;
+  padding-left: 1rem;
+  font-style: italic;
+  color: #464555;
+  margin: 1.5rem 0;
+}
