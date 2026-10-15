@@ -68,8 +68,14 @@ export const Chatbot: React.FC = () => {
       return;
     }
 
-    const updated: ExtendedMessage[] = [...messages, { role: 'user', content: textToSend, time }];
-    setMessages(updated);
+    const userMsg: ExtendedMessage = { role: 'user', content: textToSend, time };
+    const initialAssistantMsg: ExtendedMessage = { 
+      role: 'assistant', 
+      time, 
+      content: '' 
+    };
+
+    setMessages(prev => [...prev, userMsg, initialAssistantMsg]);
     setInput('');
     setLoading(true);
 
@@ -78,36 +84,55 @@ export const Chatbot: React.FC = () => {
         ? { title: activeDoc.title, content: activeDoc.content }
         : undefined;
 
-      const reply = await aiService.sendChatMessage(
+      const historyForApi = messages.map(m => ({ role: m.role, content: m.content }));
+
+      const reply = await aiService.streamChatMessage(
         geminiKey,
-        messages.map(m => ({ role: m.role, content: m.content })),
+        historyForApi,
         textToSend,
+        (chunkText) => {
+          setMessages(prev => {
+            const copy = [...prev];
+            const lastIdx = copy.length - 1;
+            if (lastIdx >= 0 && copy[lastIdx].role === 'assistant') {
+              copy[lastIdx] = { ...copy[lastIdx], content: chunkText };
+            }
+            return copy;
+          });
+        },
         docContext,
         db.settings?.activeModel
       );
 
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: reply,
-          suggestions: [
-            'Synthesize another literature angle',
-            'Find empirical counterarguments',
-            'Generate formal citation snippet'
-          ]
+      setMessages(prev => {
+        const copy = [...prev];
+        const lastIdx = copy.length - 1;
+        if (lastIdx >= 0 && copy[lastIdx].role === 'assistant') {
+          copy[lastIdx] = {
+            ...copy[lastIdx],
+            content: reply,
+            suggestions: [
+              'Synthesize another literature angle',
+              'Find empirical counterarguments',
+              'Generate formal citation snippet'
+            ]
+          };
         }
-      ]);
+        return copy;
+      });
     } catch (err: any) {
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `Error: ${err.message || 'Failed to generate response'}`
+      const friendlyError = aiService.handleApiError(err);
+      setMessages(prev => {
+        const copy = [...prev];
+        const lastIdx = copy.length - 1;
+        if (lastIdx >= 0 && copy[lastIdx].role === 'assistant') {
+          copy[lastIdx] = {
+            ...copy[lastIdx],
+            content: friendlyError
+          };
         }
-      ]);
+        return copy;
+      });
     } finally {
       setLoading(false);
     }
@@ -164,7 +189,7 @@ export const Chatbot: React.FC = () => {
                 <div className="flex items-center gap-1 px-1">
                   <span className="material-symbols-outlined text-primary text-[14px]">auto_awesome</span>
                   <span className="font-label-sm text-[11px] font-semibold text-on-surface">Synthesis Copilot</span>
-                  <span className="font-label-code text-[9px] text-outline">· Gemini 1.5 Flash</span>
+                  <span className="font-label-code text-[9px] text-outline">· {db.settings?.activeModel || 'gemini-2.0-flash'}</span>
                 </div>
 
                 <div className="bg-surface-container-low p-3 rounded-lg shadow-xs space-y-2 text-on-surface border border-surface-container">

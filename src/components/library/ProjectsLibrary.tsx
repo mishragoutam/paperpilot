@@ -41,7 +41,7 @@ const TEMPLATES = [
 ];
 
 export const ProjectsLibrary: React.FC = () => {
-  const { db, createProject, openProject } = useAppStore();
+  const { db, createProject, openProject, deleteProject } = useAppStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<'all' | 'recent' | 'preprints' | 'grants'>('all');
@@ -304,10 +304,26 @@ export const ProjectsLibrary: React.FC = () => {
 
                     <div className="flex items-center justify-between pt-2 border-t border-surface-container text-[11px] text-outline">
                       <span>{words.toLocaleString()} words</span>
-                      <span className="text-primary font-medium flex items-center gap-0.5">
-                        <span>Open Workspace</span>
-                        <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {db.projects.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Delete project "${project.title}"?`)) {
+                                deleteProject(project.id);
+                              }
+                            }}
+                            className="p-1 hover:text-error rounded text-outline hover:bg-surface-container"
+                            title="Delete project"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">delete</span>
+                          </button>
+                        )}
+                        <span className="text-primary font-medium flex items-center gap-0.5">
+                          <span>Open</span>
+                          <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -338,7 +354,25 @@ export const ProjectsLibrary: React.FC = () => {
                         <td className="p-3 text-outline">{p.template || 'IEEE Transactions'}</td>
                         <td className="p-3 text-outline">{doc ? doc.wordCount.toLocaleString() : 0}</td>
                         <td className="p-3 text-outline">{new Date(p.updatedAt).toLocaleDateString()}</td>
-                        <td className="p-3 text-right text-primary font-medium">Open →</td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {db.projects.length > 1 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Delete project "${p.title}"?`)) {
+                                    deleteProject(p.id);
+                                  }
+                                }}
+                                className="p-1 text-outline hover:text-error"
+                                title="Delete project"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">delete</span>
+                              </button>
+                            )}
+                            <span className="text-primary font-medium">Open →</span>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}

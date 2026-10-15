@@ -20,14 +20,13 @@ export const ResearchDesk: React.FC = () => {
   const handleSearch = async () => {
     if (!query.trim() || isSearching) return;
 
-    if (!geminiKey) {
-      alert('Please enter your Gemini API Key in the Settings tab to search and synthesize live academic papers.');
-      return;
-    }
-
     setIsSearching(true);
     try {
-      const results = await aiService.searchPapers(geminiKey, query.trim(), db.settings?.activeModel);
+      const results = await aiService.searchScholarlyLiterature(
+        query.trim(), 
+        geminiKey || undefined, 
+        db.settings?.activeModel
+      );
       if (results && results.length > 0) {
         const fullSources: Source[] = results.map((r, i) => ({
           id: r.id || `src-${Date.now()}-${i}`,
@@ -36,17 +35,19 @@ export const ResearchDesk: React.FC = () => {
           authors: r.authors || 'Unknown Authors',
           publication: r.publication || 'Academic Repository',
           publishedAt: r.publishedAt || String(new Date().getFullYear()),
-          url: r.url || '',
+          url: r.url || (r.doi ? `https://doi.org/${r.doi}` : ''),
           doi: r.doi || '',
           snippet: r.snippet || '',
           abstract: r.abstract || '',
           accessedAt: new Date().toISOString(),
           notes: '',
-          semanticMatch: `${Math.floor(88 + Math.random() * 11)}%`,
-          tag: 'Peer-Reviewed'
+          semanticMatch: r.semanticMatch || `${Math.floor(88 + Math.random() * 11)}%`,
+          tag: r.tag || 'Peer-Reviewed'
         }));
         await addSources(fullSources);
         setQuery('');
+      } else {
+        alert('No academic papers found for this query. Try a broader scholarly topic or keyword.');
       }
     } catch (err: any) {
       alert(err.message || 'Failed to search academic literature.');
@@ -57,34 +58,37 @@ export const ResearchDesk: React.FC = () => {
 
   const handleSyncFeeds = async () => {
     setIsRefreshing(true);
-    if (geminiKey) {
-      try {
-        const topic = activeProject?.title || 'Neuro-Symbolic AI & Fact Verification';
-        const results = await aiService.searchPapers(geminiKey, topic, db.settings?.activeModel);
-        if (results && results.length > 0) {
-          const mapped: Source[] = results.map((r, i) => ({
-            id: `sync-${Date.now()}-${i}`,
-            projectId: activeProjectId || '',
-            title: r.title || 'Untitled',
-            authors: r.authors || 'Authors',
-            publication: r.publication || 'Repository',
-            publishedAt: r.publishedAt || '2024',
-            url: r.url || '',
-            doi: r.doi || '',
-            snippet: r.snippet || '',
-            abstract: r.abstract || '',
-            accessedAt: new Date().toISOString(),
-            notes: '',
-            semanticMatch: '95%',
-            tag: 'Open Access'
-          }));
-          await addSources(mapped);
-        }
-      } catch (e) {
-        console.error(e);
+    try {
+      const topic = activeProject?.title || 'Neuro-Symbolic AI & Fact Verification';
+      const results = await aiService.searchScholarlyLiterature(
+        topic,
+        geminiKey || undefined,
+        db.settings?.activeModel
+      );
+      if (results && results.length > 0) {
+        const mapped: Source[] = results.map((r, i) => ({
+          id: `sync-${Date.now()}-${i}`,
+          projectId: activeProjectId || '',
+          title: r.title || 'Untitled',
+          authors: r.authors || 'Authors',
+          publication: r.publication || 'Repository',
+          publishedAt: r.publishedAt || '2024',
+          url: r.url || (r.doi ? `https://doi.org/${r.doi}` : ''),
+          doi: r.doi || '',
+          snippet: r.snippet || '',
+          abstract: r.abstract || '',
+          accessedAt: new Date().toISOString(),
+          notes: '',
+          semanticMatch: '95%',
+          tag: 'Open Access'
+        }));
+        await addSources(mapped);
       }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 800);
     }
-    setTimeout(() => setIsRefreshing(false), 800);
   };
 
   const handleCite = (source: Source, e: React.MouseEvent) => {
@@ -335,36 +339,55 @@ export const ResearchDesk: React.FC = () => {
       )}
 
       {/* BibTeX Modal */}
-      {bibtexSource && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-lg shadow-xl max-w-md w-full p-4 border border-surface-container space-y-3">
-            <div className="flex items-start justify-between">
-              <h3 className="font-semibold text-xs text-on-surface">BibTeX Record</h3>
-              <button onClick={() => setBibtexSource(null)} className="text-outline hover:text-on-surface text-sm">✕</button>
-            </div>
-            <pre className="p-3 bg-surface-container text-[11px] font-label-code rounded overflow-x-auto text-on-surface select-text">
-{`@article{${bibtexSource.authors.split(' ')[0].toLowerCase()}${bibtexSource.publishedAt},
+      {bibtexSource && (() => {
+        const firstAuthor = (bibtexSource.authors || 'author').split(' ')[0].toLowerCase().replace(/[^a-z]/g, '') || 'author';
+        const year = bibtexSource.publishedAt || '2024';
+        const bibtexString = `@article{${firstAuthor}${year},
   title = {${bibtexSource.title}},
   author = {${bibtexSource.authors}},
-  journal = {${bibtexSource.publication}},
-  year = {${bibtexSource.publishedAt}},
+  journal = {${bibtexSource.publication || 'Preprint'}},
+  year = {${year}},
   doi = {${bibtexSource.doi || '10.xxxx/xxxx'}}
-}`}
-            </pre>
-            <div className="flex justify-end">
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(`@article{...}`);
-                  setBibtexSource(null);
-                }}
-                className="px-3 py-1 bg-primary text-on-primary text-xs rounded"
-              >
-                Copy BibTeX
-              </button>
+}`;
+        return (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-surface-container-lowest rounded-lg shadow-xl max-w-md w-full p-4 border border-surface-container space-y-3 animate-in fade-in duration-150">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-primary">format_quote</span>
+                  <h3 className="font-semibold text-xs text-on-surface">BibTeX Record</h3>
+                </div>
+                <button onClick={() => setBibtexSource(null)} className="text-outline hover:text-on-surface text-sm">✕</button>
+              </div>
+              <pre className="p-3 bg-surface-container text-[11px] font-label-code rounded overflow-x-auto text-on-surface select-text leading-relaxed">
+{bibtexString}
+              </pre>
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-outline font-label-code">{firstAuthor}{year}</span>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setBibtexSource(null)}
+                    className="px-2.5 py-1 text-xs text-outline hover:text-on-surface"
+                  >
+                    Close
+                  </button>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(bibtexString);
+                      alert('BibTeX citation copied to clipboard!');
+                      setBibtexSource(null);
+                    }}
+                    className="px-3 py-1 bg-primary text-on-primary text-xs rounded font-medium flex items-center gap-1 shadow-xs hover:bg-primary-container"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">content_copy</span>
+                    <span>Copy BibTeX</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </aside>
   );
 };

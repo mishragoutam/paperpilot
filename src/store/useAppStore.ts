@@ -23,8 +23,12 @@ interface AppState {
   createProject: (title: string, description: string, template?: string) => Promise<Project>;
   openProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
+  deleteProject: (id: string) => Promise<void>;
+  updateProjectTemplate: (projectId: string, template: string) => Promise<void>;
   createDocument: (projectId: string, title: string, content?: string) => Promise<Document>;
   setActiveDocument: (id: string | null) => void;
+  updateDocumentTitle: (id: string, title: string) => Promise<void>;
+  deleteDocument: (id: string) => Promise<void>;
   updateDocumentContent: (id: string, content: string, wordCount: number) => Promise<void>;
   addSources: (newSources: Source[]) => Promise<void>;
   insertCitation: (citation: string) => void;
@@ -35,6 +39,15 @@ interface AppState {
   toggleRightPanel: () => void;
   toggleTheme: () => void;
 }
+
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+const debouncedWriteDb = (db: Database) => {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    dbService.writeDb(db);
+    saveTimeout = null;
+  }, 750);
+};
 
 export const useAppStore = create<AppState>((set, get) => ({
   db: { projects: [], documents: [], sources: [], settings: {} },
@@ -109,12 +122,35 @@ export const useAppStore = create<AppState>((set, get) => ({
     
     await dbService.writeDb(newDb);
     set({ 
-      db: newDb,
+      db: newDb, 
       activeProjectId: newProject.id,
       activeDocumentId: newDoc.id,
       currentView: 'workspace'
     });
     return newProject;
+  },
+
+  deleteProject: async (id: string) => {
+    const { db, activeProjectId } = get();
+    const remainingProjects = db.projects.filter(p => p.id !== id);
+    const remainingDocs = db.documents.filter(d => d.projectId !== id);
+    const remainingSources = db.sources.filter(s => s.projectId !== id);
+    const newDb = { ...db, projects: remainingProjects, documents: remainingDocs, sources: remainingSources };
+    await dbService.writeDb(newDb);
+    
+    let nextProjId = activeProjectId === id ? (remainingProjects[0]?.id || null) : activeProjectId;
+    let nextDoc = nextProjId ? remainingDocs.find(d => d.projectId === nextProjId) : null;
+    set({ db: newDb, activeProjectId: nextProjId, activeDocumentId: nextDoc ? nextDoc.id : null });
+  },
+
+  updateProjectTemplate: async (projectId: string, template: string) => {
+    const { db } = get();
+    const updatedProjects = db.projects.map(p => 
+      p.id === projectId ? { ...p, template, updatedAt: new Date().toISOString() } : p
+    );
+    const newDb = { ...db, projects: updatedProjects };
+    set({ db: newDb });
+    await dbService.writeDb(newDb);
   },
 
   setActiveProject: (id: string | null) => {
@@ -124,12 +160,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createDocument: async (projectId: string, title: string, content: string = '') => {
+    const initialContent = content || `<h2>${title}</h2><p>Begin drafting section content here...</p>`;
     const newDoc: Document = {
       id: `doc-${Date.now()}`,
       projectId,
       title,
-      content,
-      wordCount: 0,
+      content: initialContent,
+      wordCount: initialContent.split(/\s+/).filter(Boolean).length,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -141,14 +178,40 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setActiveDocument: (id: string | null) => set({ activeDocumentId: id }),
 
+  updateDocumentTitle: async (id: string, title: string) => {
+    const { db } = get();
+    const updatedDocs = db.documents.map(d =>
+      d.id === id ? { ...d, title, updatedAt: new Date().toISOString() } : d
+    );
+    const newDb = { ...db, documents: updatedDocs };
+    set({ db: newDb });
+    await dbService.writeDb(newDb);
+  },
+
+  deleteDocument: async (id: string) => {
+    const { db, activeDocumentId, activeProjectId } = get();
+    const remainingDocs = db.documents.filter(d => d.id !== id);
+    const newDb = { ...db, documents: remainingDocs };
+    await dbService.writeDb(newDb);
+
+    let nextDocId = activeDocumentId;
+    if (activeDocumentId === id) {
+      const projDoc = remainingDocs.find(d => d.projectId === activeProjectId);
+      nextDocId = projDoc ? projDoc.id : null;
+    }
+    set({ db: newDb, activeDocumentId: nextDocId });
+  },
+
   updateDocumentContent: async (id: string, content: string, wordCount: number) => {
     const { db } = get();
     const updatedDocs = db.documents.map(d => 
       d.id === id ? { ...d, content, wordCount, updatedAt: new Date().toISOString() } : d
     );
     const newDb = { ...db, documents: updatedDocs };
+    // Immediately update memory store so UI is 100% responsive
     set({ db: newDb });
-    await dbService.writeDb(newDb);
+    // Debounce disk I/O to avoid thrashing disk on every single keystroke
+    debouncedWriteDb(newDb);
   },
 
   addSources: async (newSources: Source[]) => {
