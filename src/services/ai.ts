@@ -17,12 +17,26 @@ export interface DiscoveredModel {
   displayName: string;
 }
 
-// In-memory cache for the validated working model
-let cachedWorkingModel: string | null = null;
+// In-memory + persistent cache for the validated fastest working model
+let cachedWorkingModel: string | null = (() => {
+  try {
+    return localStorage.getItem('paperpilot_working_model') || 'gemini-2.0-flash';
+  } catch {
+    return 'gemini-2.0-flash';
+  }
+})();
 
-// Fallback priority list when a model returns 404 or 503 (high demand)
+export function setCachedWorkingModel(model: string) {
+  cachedWorkingModel = model;
+  try {
+    localStorage.setItem('paperpilot_working_model', model);
+  } catch {}
+}
+
+// Fallback priority list optimized for speed and low-latency response
 const CANDIDATE_MODELS = [
   'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
   'gemini-1.5-flash',
   'gemini-1.5-flash-8b',
   'gemini-2.5-flash',
@@ -73,6 +87,21 @@ export const aiService = {
               displayName: m.displayName ? `${m.displayName} (${cleanId})` : cleanId,
             };
           });
+
+        // Prioritize rock-solid GA models to avoid preview/high-demand errors
+        supported.sort((a: any, b: any) => {
+          const rank = (id: string) => {
+            if (id === 'gemini-2.0-flash') return 1;
+            if (id === 'gemini-1.5-flash') return 2;
+            if (id === 'gemini-2.5-flash') return 3;
+            if (id === 'gemini-1.5-pro') return 4;
+            if (id.includes('flash') && !id.includes('preview')) return 5;
+            if (id.includes('pro') && !id.includes('preview')) return 6;
+            return 10;
+          };
+          return rank(a.id) - rank(b.id);
+        });
+
         return supported;
       }
       return [];
@@ -148,7 +177,8 @@ export const aiService = {
     history: ChatMessage[],
     userMessage: string,
     docContext?: DocumentContext,
-    preferredModel?: string
+    preferredModel?: string,
+    speedMode: 'turbo' | 'balanced' | 'deep' = 'turbo'
   ): Promise<string> {
     if (!apiKey || !apiKey.trim()) {
       throw new Error('Gemini API key is missing. Please go to Settings and enter your Google Gemini API key.');
@@ -166,7 +196,7 @@ export const aiService = {
 
     if (docContext && docContext.title) {
       const cleanContent = docContext.content
-        ? docContext.content.replace(/<[^>]*>?/gm, '').slice(0, 4000)
+        ? docContext.content.replace(/<[^>]*>?/gm, '').trim().slice(0, 1500)
         : '(Document is currently empty)';
 
       systemInstruction += `\n\n[ACTIVE DOCUMENT CONTEXT]\nTitle: "${docContext.title}"\nManuscript Excerpt:\n"""\n${cleanContent}\n"""\nUse this context when the user asks questions regarding their current draft.`;
@@ -181,12 +211,15 @@ export const aiService = {
         parts: [{ text: msg.content }],
       }));
 
-    // 2. Gemini strictly requires history to start with role 'user'
-    const firstUserIdx = rawHistory.findIndex(m => m.role === 'user');
-    let sanitizedHistory: typeof rawHistory = [];
+    // 2. Window conversation history to recent turns for blazing-fast prompt processing
+    const historyWindow = rawHistory.slice(-8);
+
+    // 3. Gemini strictly requires history to start with role 'user'
+    const firstUserIdx = historyWindow.findIndex(m => m.role === 'user');
+    let sanitizedHistory: typeof historyWindow = [];
 
     if (firstUserIdx !== -1) {
-      const sliced = rawHistory.slice(firstUserIdx);
+      const sliced = historyWindow.slice(firstUserIdx);
       for (const item of sliced) {
         if (sanitizedHistory.length === 0) {
           sanitizedHistory.push(item);
@@ -204,13 +237,22 @@ export const aiService = {
       }
     }
 
-    // Resolve model name dynamically
-    let modelName = preferredModel || cachedWorkingModel || 'gemini-2.0-flash';
+    // Resolve model sequence with auto-failover
+    const modelsToTry = Array.from(new Set([
+      preferredModel,
+      cachedWorkingModel,
+      ...CANDIDATE_MODELS
+    ].filter(Boolean))) as string[];
 
     const executeChat = async (mName: string) => {
       const model = genAI.getGenerativeModel({
         model: mName,
         systemInstruction,
+        generationConfig: {
+          temperature: 0.65,
+          topP: 0.95,
+          maxOutputTokens: 2048,
+        }
       });
 
       const chat = model.startChat({
@@ -219,27 +261,32 @@ export const aiService = {
 
       const result = await chat.sendMessage(userMessage);
       const response = await result.response;
-      cachedWorkingModel = mName;
+      setCachedWorkingModel(mName);
       return response.text();
     };
 
-    try {
-      return await executeChat(modelName);
-    } catch (err: any) {
-      const msg = String(err?.message || err);
-      if (msg.includes('404') || msg.includes('not found') || msg.includes('not supported')) {
-        try {
-          const resolved = await aiService.resolveWorkingModel(apiKey, preferredModel);
-          if (resolved !== modelName) {
-            return await executeChat(resolved);
-          }
-        } catch (resolveErr) {
-          console.error('Failed to resolve fallback model:', resolveErr);
+    let lastError: any = null;
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const currentModel = modelsToTry[i];
+      try {
+        return await executeChat(currentModel);
+      } catch (err: any) {
+        lastError = err;
+        const msg = String(err?.message || err);
+        if (msg.includes('API_KEY_INVALID') || msg.includes('not valid')) {
+          throw err;
         }
+        if (isRetryableModelError(err)) {
+          const nextModel = modelsToTry[i + 1] || 'default';
+          console.warn(`[PaperPilot AI] Model ${currentModel} encountered retryable issue (${msg.slice(0, 100)}...). Auto-failing over to ${nextModel}...`);
+          continue;
+        }
+        return aiService.handleApiError(err);
       }
-      console.error('Gemini Chat Error:', err);
-      return aiService.handleApiError(err);
     }
+
+    return aiService.handleApiError(lastError);
   },
 
   /**
@@ -251,7 +298,8 @@ export const aiService = {
     userMessage: string,
     onChunk: (accumulatedText: string) => void,
     docContext?: DocumentContext,
-    preferredModel?: string
+    preferredModel?: string,
+    speedMode: 'turbo' | 'balanced' | 'deep' = 'turbo'
   ): Promise<string> {
     if (!apiKey || !apiKey.trim()) {
       throw new Error('Gemini API key is missing. Please go to Settings and enter your Google Gemini API key.');
@@ -268,7 +316,7 @@ export const aiService = {
 
     if (docContext && docContext.title) {
       const cleanContent = docContext.content
-        ? docContext.content.replace(/<[^>]*>?/gm, '').slice(0, 4000)
+        ? docContext.content.replace(/<[^>]*>?/gm, '').trim().slice(0, 1500)
         : '(Document is currently empty)';
 
       systemInstruction += `\n\n[ACTIVE DOCUMENT CONTEXT]\nTitle: "${docContext.title}"\nManuscript Excerpt:\n"""\n${cleanContent}\n"""\nUse this context when the user asks questions regarding their current draft.`;
@@ -281,11 +329,14 @@ export const aiService = {
         parts: [{ text: msg.content }],
       }));
 
-    const firstUserIdx = rawHistory.findIndex(m => m.role === 'user');
-    let sanitizedHistory: typeof rawHistory = [];
+    // Window conversation history to recent turns for blazing-fast prompt ingestion
+    const historyWindow = rawHistory.slice(-8);
+
+    const firstUserIdx = historyWindow.findIndex(m => m.role === 'user');
+    let sanitizedHistory: typeof historyWindow = [];
 
     if (firstUserIdx !== -1) {
-      const sliced = rawHistory.slice(firstUserIdx);
+      const sliced = historyWindow.slice(firstUserIdx);
       for (const item of sliced) {
         if (sanitizedHistory.length === 0) {
           sanitizedHistory.push(item);
@@ -302,12 +353,22 @@ export const aiService = {
       }
     }
 
-    let modelName = preferredModel || cachedWorkingModel || 'gemini-2.0-flash';
+    // Build priority candidate sequence with auto-failover
+    const modelsToTry = Array.from(new Set([
+      preferredModel,
+      cachedWorkingModel,
+      ...CANDIDATE_MODELS
+    ].filter(Boolean))) as string[];
 
     const executeStreamWithFallback = async (mName: string) => {
       const model = genAI.getGenerativeModel({
         model: mName,
         systemInstruction,
+        generationConfig: {
+          temperature: 0.65,
+          topP: 0.95,
+          maxOutputTokens: 2048,
+        }
       });
 
       // 1. Try real-time streaming first
@@ -318,59 +379,66 @@ export const aiService = {
 
         for await (const chunk of resultStream.stream) {
           const text = chunk.text();
-          accumulated += text;
-          onChunk(accumulated);
+          if (text) {
+            accumulated += text;
+            onChunk(accumulated);
+          }
         }
 
         if (accumulated.trim()) {
-          cachedWorkingModel = mName;
+          setCachedWorkingModel(mName);
           return accumulated;
         }
       } catch (streamErr: any) {
+        // If the model is 503 (high demand) or 404, don't attempt sendMessage on the same overloaded model
+        if (isRetryableModelError(streamErr)) {
+          throw streamErr;
+        }
         console.warn('Stream parser issue encountered, falling back to standard generation:', streamErr);
       }
 
-      // 2. Seamless Fallback: If streaming fails with "Failed to parse stream" or network interruption,
-      // execute standard reliable non-streaming sendMessage
+      // 2. Seamless Fallback: execute standard non-streaming sendMessage without artificial delay
       const chatFallback = model.startChat({ history: sanitizedHistory });
       const result = await chatFallback.sendMessage(userMessage);
       const response = await result.response;
       const fullText = response.text();
-      cachedWorkingModel = mName;
+      setCachedWorkingModel(mName);
 
-      // Animate smoothly to onChunk callback for progressive UI feedback
       if (onChunk && fullText) {
-        const words = fullText.split(' ');
-        let current = '';
-        const step = Math.max(3, Math.floor(words.length / 25));
-        for (let i = 0; i < words.length; i += step) {
-          current = words.slice(0, i + step).join(' ');
-          onChunk(current);
-          await new Promise(r => setTimeout(r, 12));
-        }
         onChunk(fullText);
       }
 
       return fullText;
     };
 
-    try {
-      return await executeStreamWithFallback(modelName);
-    } catch (err: any) {
-      const msg = String(err?.message || err);
-      if (msg.includes('404') || msg.includes('not found') || msg.includes('not supported')) {
-        try {
-          const resolved = await aiService.resolveWorkingModel(apiKey, preferredModel);
-          if (resolved !== modelName) {
-            return await executeStreamWithFallback(resolved);
-          }
-        } catch {
-          // fallback
+    let lastError: any = null;
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const currentModel = modelsToTry[i];
+      try {
+        const response = await executeStreamWithFallback(currentModel);
+        cachedWorkingModel = currentModel;
+        return response;
+      } catch (err: any) {
+        lastError = err;
+        const msg = String(err?.message || err);
+        // Invalid API key aborts immediately
+        if (msg.includes('API_KEY_INVALID') || msg.includes('not valid')) {
+          throw err;
         }
+        // Retryable: 503 high demand, 404, 500, UNAVAILABLE -> seamlessly try next candidate model
+        if (isRetryableModelError(err)) {
+          const nextModel = modelsToTry[i + 1] || 'none';
+          console.warn(`[PaperPilot AI] Model ${currentModel} returned retryable error (${msg.slice(0, 100)}...). Auto-failing over to ${nextModel}...`);
+          continue;
+        }
+        // Non-retryable error
+        console.error('Gemini Stream Chat Error:', err);
+        throw err;
       }
-      console.error('Gemini Stream Chat Error:', err);
-      throw err;
     }
+
+    throw lastError || new Error('All Gemini model candidates failed.');
   },
 
   /**
@@ -521,5 +589,28 @@ export const aiService = {
       return '⚠️ Stream connection was interrupted by network. Automatic retry has been configured.';
     }
     return `⚠️ Gemini API Error: ${message}`;
+  },
+
+  /**
+   * Benchmark and test roundtrip speed to Gemini in milliseconds.
+   */
+  async testLatency(apiKey: string, preferredModel?: string): Promise<{ latencyMs: number; model: string }> {
+    const key = apiKey.trim();
+    if (!key) throw new Error('Gemini API key is required');
+
+    const modelName = preferredModel || cachedWorkingModel || 'gemini-2.0-flash';
+    const genAI = new GoogleGenerativeAI(key);
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: { maxOutputTokens: 10, temperature: 0.1 }
+    });
+
+    const start = performance.now();
+    const res = await model.generateContent('ping');
+    await res.response;
+    const latencyMs = Math.round(performance.now() - start);
+
+    setCachedWorkingModel(modelName);
+    return { latencyMs, model: modelName };
   },
 };

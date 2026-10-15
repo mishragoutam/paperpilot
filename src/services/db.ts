@@ -46,6 +46,7 @@ export interface Database {
     citationStyle?: string;
     theme?: string;
     activeModel?: string;
+    speedMode?: 'turbo' | 'balanced' | 'deep';
   };
 }
 
@@ -143,7 +144,9 @@ export const INITIAL_DATABASE: Database = {
     similarityInterval: 90,
     autoCheckEnabled: false,
     citationStyle: 'IEEE',
-    theme: 'light'
+    theme: 'light',
+    activeModel: 'gemini-2.0-flash',
+    speedMode: 'turbo'
   }
 };
 

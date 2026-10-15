@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAppStore, type AppView } from '../../store/useAppStore';
+import { useAppStore } from '../../store/useAppStore';
 
 export const Header: React.FC = () => {
   const { 
@@ -14,7 +14,8 @@ export const Header: React.FC = () => {
     triggerUndo, 
     triggerRedo,
     activeProjectId,
-    updateProjectTemplate
+    updateProjectTemplate,
+    aiSpeedMode,
   } = useAppStore();
 
   const [exportOpen, setExportOpen] = useState(false);
@@ -115,7 +116,9 @@ ${plain}
             onClick={() => setCurrentView('workspace')}
             className="flex items-center gap-space-xs cursor-pointer hover:opacity-85 transition-opacity"
           >
-            <span className="material-symbols-outlined text-[20px] text-primary">auto_stories</span>
+            <div className="w-5 h-5 rounded bg-[#106ebe] text-white flex items-center justify-center font-bold text-[12px] shadow-xs">
+              W
+            </div>
             <span className="font-label-md text-label-md font-semibold tracking-tight text-on-surface">PaperPilot</span>
           </div>
 
@@ -156,8 +159,18 @@ ${plain}
           </div>
         </div>
 
-        {/* Right Section: Telemetry, Templates, Export & Controls */}
+        {/* Right Section: Speed Indicator, Templates, Export & Controls */}
         <div className="flex items-center gap-space-sm">
+          {/* Gemini Flash Turbo Speed Pill */}
+          <button 
+            onClick={() => setCurrentView('settings')}
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-label-sm text-label-sm hover:bg-emerald-500/20 transition-colors"
+            title="Gemini 2.0 Flash Turbo is active (Instant Low-Latency Mode)"
+          >
+            <span className="material-symbols-outlined text-[13px] text-emerald-600 animate-pulse">bolt</span>
+            <span className="font-semibold">⚡ Gemini Turbo</span>
+          </button>
+
           {/* Originality Badge Button */}
           <button 
             onClick={() => setCurrentView('originality')}
@@ -167,7 +180,7 @@ ${plain}
             <span className="material-symbols-outlined text-[13px] text-tertiary">verified</span>
             <span>98% Unique</span>
             <span className="text-outline text-[10px]">•</span>
-            <span className="text-on-surface-variant">Checked just now</span>
+            <span className="text-on-surface-variant">Checked</span>
           </button>
 
           {/* Template Selector Dropdown */}

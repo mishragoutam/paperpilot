@@ -10,7 +10,7 @@ import { Settings } from './components/settings/Settings';
 import { useAppStore } from './store/useAppStore';
 
 const App: React.FC = () => {
-  const { init, initialized, leftPanelOpen, rightPanelOpen, currentView } = useAppStore();
+  const { init, initialized, leftPanelOpen, rightPanelOpen, currentView, ribbonCollapsed } = useAppStore();
 
   useEffect(() => {
     init();

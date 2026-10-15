@@ -16,10 +16,20 @@ interface AppState {
   pendingCitation: string | null;
   undoTrigger: number;
   redoTrigger: number;
+  editorInstance: any | null;
+  editorTick: number;
+  activeRibbonTab: 'file' | 'home' | 'insert' | 'design' | 'layout' | 'references' | 'mailings' | 'review' | 'view' | 'help';
+  ribbonCollapsed: boolean;
+  aiSpeedMode: 'turbo' | 'balanced' | 'deep';
   
   // Actions
   init: () => Promise<void>;
   setCurrentView: (view: AppView) => void;
+  setEditorInstance: (editor: any) => void;
+  triggerEditorTick: () => void;
+  setActiveRibbonTab: (tab: 'file' | 'home' | 'insert' | 'design' | 'layout' | 'references' | 'mailings' | 'review' | 'view' | 'help') => void;
+  toggleRibbonCollapsed: () => void;
+  setAiSpeedMode: (mode: 'turbo' | 'balanced' | 'deep') => void;
   createProject: (title: string, description: string, template?: string) => Promise<Project>;
   openProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
@@ -61,6 +71,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingCitation: null,
   undoTrigger: 0,
   redoTrigger: 0,
+  editorInstance: null,
+  editorTick: 0,
+  activeRibbonTab: 'home',
+  ribbonCollapsed: false,
+  aiSpeedMode: 'turbo',
 
   init: async () => {
     const db = await dbService.readDb();
@@ -72,7 +87,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       initialized: true,
       activeProjectId: firstProject ? firstProject.id : null,
       activeDocumentId: firstDoc ? firstDoc.id : null,
-      theme: db.settings?.theme === 'dark' ? 'dark' : 'light'
+      theme: db.settings?.theme === 'dark' ? 'dark' : 'light',
+      aiSpeedMode: db.settings?.speedMode || 'turbo'
     });
 
     if (db.settings?.theme === 'dark') {
@@ -83,6 +99,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setCurrentView: (view: AppView) => set({ currentView: view }),
+  setEditorInstance: (editor: any) => set({ editorInstance: editor }),
+  triggerEditorTick: () => set(state => ({ editorTick: state.editorTick + 1 })),
+  setActiveRibbonTab: (tab: any) => set({ activeRibbonTab: tab }),
+  toggleRibbonCollapsed: () => set(state => ({ ribbonCollapsed: !state.ribbonCollapsed })),
+  setAiSpeedMode: (mode: 'turbo' | 'balanced' | 'deep') => set(state => {
+    const newDb = { ...state.db, settings: { ...state.db.settings, speedMode: mode } };
+    dbService.writeDb(newDb);
+    return { aiSpeedMode: mode, db: newDb };
+  }),
 
   openProject: (id: string) => {
     const { db } = get();

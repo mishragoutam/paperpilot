@@ -11,7 +11,10 @@ export const Settings: React.FC = () => {
   // AI & Models state
   const [geminiKey, setGeminiKey] = useState(db.settings?.geminiKey || '');
   const [activeModel, setActiveModel] = useState(db.settings?.activeModel || 'gemini-2.0-flash');
+  const [speedMode, setSpeedMode] = useState<'turbo' | 'balanced' | 'deep'>(db.settings?.speedMode || 'turbo');
   const [availableModelsList, setAvailableModelsList] = useState<DiscoveredModel[]>([]);
+  const [latencyResult, setLatencyResult] = useState<{ ms: number; model: string } | null>(null);
+  const [testingLatency, setTestingLatency] = useState(false);
   const [ollamaSocket, setOllamaSocket] = useState('http://localhost:11434');
   const [ollamaWeight, setOllamaWeight] = useState('Llama-3.3-70B-Instruct-Q4_K_M');
   const [aiProvider, setAiProvider] = useState<'local' | 'commercial' | 'institutional'>('commercial');
@@ -107,6 +110,23 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const handleBenchmarkLatency = async () => {
+    const key = geminiKey.trim();
+    if (!key) {
+      setTestResult({ success: false, message: 'Please enter your Gemini API key first.' });
+      return;
+    }
+    setTestingLatency(true);
+    try {
+      const res = await aiService.testLatency(key, activeModel);
+      setLatencyResult({ ms: res.latencyMs, model: res.model });
+    } catch (err: any) {
+      alert(`Latency benchmark error: ${err.message || String(err)}`);
+    } finally {
+      setTestingLatency(false);
+    }
+  };
+
   const handleSave = async () => {
     const newDb = { 
       ...db, 
@@ -118,11 +138,12 @@ export const Settings: React.FC = () => {
         autoCheckEnabled,
         citationStyle,
         theme,
-        activeModel: activeModel.trim()
+        activeModel: activeModel.trim(),
+        speedMode
       } 
     };
     await dbService.writeDb(newDb);
-    useAppStore.setState({ db: newDb });
+    useAppStore.setState({ db: newDb, aiSpeedMode: speedMode });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -479,6 +500,106 @@ export const Settings: React.FC = () => {
                       <option value="0.5">0.5 (Balanced Literature Synthesis)</option>
                       <option value="0.8">0.8 (Creative Hypothesis Generation)</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Gemini Speed Acceleration Presets */}
+                <div className="pt-3 border-t border-surface-container space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-xs font-semibold text-on-surface flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-amber-500">bolt</span>
+                        <span>Gemini Latency &amp; Speed Acceleration Presets</span>
+                      </label>
+                      <p className="text-[11px] text-outline">Configure response throughput, streaming speed, and token reasoning limits.</p>
+                    </div>
+                    <button
+                      onClick={handleBenchmarkLatency}
+                      disabled={testingLatency || !geminiKey.trim()}
+                      className="px-2.5 py-1 text-xs rounded bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant flex items-center gap-1 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[13px] text-primary">speed</span>
+                      <span>{testingLatency ? 'Benchmarking...' : 'Test Latency (ms)'}</span>
+                    </button>
+                  </div>
+
+                  {latencyResult && (
+                    <div className="p-2 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs flex items-center justify-between text-emerald-800 dark:text-emerald-200">
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
+                        <span>Measured Roundtrip Speed: <strong>{latencyResult.ms} ms</strong> via {latencyResult.model}</span>
+                      </div>
+                      <span className="font-semibold text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100">
+                        {latencyResult.ms < 450 ? '⚡ Ultra Low Latency' : 'Optimal'}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    <div
+                      onClick={() => {
+                        setSpeedMode('turbo');
+                        setActiveModel('gemini-2.0-flash');
+                      }}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                        speedMode === 'turbo'
+                          ? 'border-primary bg-primary/10 shadow-xs'
+                          : 'border-surface-container hover:bg-surface-container'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-xs text-on-surface flex items-center gap-1">
+                          <span>⚡ Turbo Mode</span>
+                        </span>
+                        {speedMode === 'turbo' && <span className="material-symbols-outlined text-[15px] text-primary">check_circle</span>}
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant leading-tight">
+                        Zero thinking latency, instant streaming. Best for rapid writing &amp; quick queries.
+                      </p>
+                      <div className="mt-2 text-[10px] text-primary font-medium">Model: gemini-2.0-flash</div>
+                    </div>
+
+                    <div
+                      onClick={() => {
+                        setSpeedMode('balanced');
+                        setActiveModel('gemini-1.5-flash');
+                      }}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                        speedMode === 'balanced'
+                          ? 'border-primary bg-primary/10 shadow-xs'
+                          : 'border-surface-container hover:bg-surface-container'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-xs text-on-surface">⚖️ Balanced</span>
+                        {speedMode === 'balanced' && <span className="material-symbols-outlined text-[15px] text-primary">check_circle</span>}
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant leading-tight">
+                        Reliable standard speed with balanced academic synthesis and high rate limits.
+                      </p>
+                      <div className="mt-2 text-[10px] text-secondary font-medium">Model: gemini-1.5-flash</div>
+                    </div>
+
+                    <div
+                      onClick={() => {
+                        setSpeedMode('deep');
+                        setActiveModel('gemini-1.5-pro');
+                      }}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                        speedMode === 'deep'
+                          ? 'border-primary bg-primary/10 shadow-xs'
+                          : 'border-surface-container hover:bg-surface-container'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-xs text-on-surface">🧠 Deep Reasoning</span>
+                        {speedMode === 'deep' && <span className="material-symbols-outlined text-[15px] text-primary">check_circle</span>}
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant leading-tight">
+                        Extended multi-turn context analysis, complex literature synthesis, and verification.
+                      </p>
+                      <div className="mt-2 text-[10px] text-tertiary font-medium">Model: gemini-1.5-pro</div>
+                    </div>
                   </div>
                 </div>
               </div>

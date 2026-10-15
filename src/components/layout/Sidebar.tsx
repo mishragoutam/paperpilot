@@ -10,7 +10,8 @@ export const Sidebar: React.FC = () => {
     activeDocumentId, 
     setActiveDocument, 
     createDocument,
-    deleteDocument 
+    deleteDocument,
+    ribbonCollapsed 
   } = useAppStore();
 
   const [filterQuery, setFilterQuery] = useState('');

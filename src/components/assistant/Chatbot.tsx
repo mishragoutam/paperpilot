@@ -13,9 +13,10 @@ interface ExtendedMessage extends ChatMessage {
 }
 
 export const Chatbot: React.FC = () => {
-  const { db, activeDocumentId, setCurrentView } = useAppStore();
+  const { db, activeDocumentId, setCurrentView, aiSpeedMode, setAiSpeedMode } = useAppStore();
   const geminiKey = db.settings?.geminiKey || '';
   const activeDoc = db.documents.find(d => d.id === activeDocumentId);
+  const [latencyText, setLatencyText] = useState<string>('');
 
   const [messages, setMessages] = useState<ExtendedMessage[]>([
     {
@@ -46,6 +47,18 @@ export const Chatbot: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  const handleTestLatency = async () => {
+    if (!geminiKey) return;
+    setLatencyText('Pinging...');
+    try {
+      const res = await aiService.testLatency(geminiKey, db.settings?.activeModel);
+      setLatencyText(`${res.latencyMs}ms`);
+      setTimeout(() => setLatencyText(''), 4000);
+    } catch {
+      setLatencyText('Err');
+    }
+  };
 
   const handleSend = async (customPrompt?: string) => {
     const textToSend = (customPrompt || input).trim();
@@ -101,7 +114,8 @@ export const Chatbot: React.FC = () => {
           });
         },
         docContext,
-        db.settings?.activeModel
+        db.settings?.activeModel || 'gemini-2.0-flash',
+        aiSpeedMode || 'turbo'
       );
 
       setMessages(prev => {
@@ -148,25 +162,35 @@ export const Chatbot: React.FC = () => {
             <span className="font-label-md text-label-md font-semibold text-on-surface">Research Assistant</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="flex items-center gap-1 text-[10px] font-label-sm text-tertiary bg-tertiary-fixed px-1.5 py-0.5 rounded">
-              <span className={`w-1.5 h-1.5 rounded-full ${geminiKey ? 'bg-tertiary animate-ping' : 'bg-amber-500'}`}></span>
-              <span>{geminiKey ? 'Web Connected' : 'Key Needed'}</span>
-            </span>
+            {/* Speed / Latency Pill */}
+            <button
+              onClick={handleTestLatency}
+              className="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-200 transition-colors"
+              title="Click to test real-time latency with Gemini"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[12px] text-emerald-600 animate-pulse">bolt</span>
+              <span>{latencyText || '⚡ Turbo Flash'}</span>
+            </button>
+
             <button 
               onClick={() => setCurrentView('settings')}
               className="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" 
-              title="Assistant Settings"
+              title="Assistant Settings & Speed Optimization"
             >
               <span className="material-symbols-outlined text-[14px]">tune</span>
             </button>
           </div>
         </div>
 
-        {/* Active Target Indicator */}
+        {/* Active Target Indicator & Latency preset */}
         <div className="flex items-center justify-between px-2 py-1 rounded bg-surface-container font-label-sm text-[11px]">
-          <span className="text-on-surface-variant">Active Target:</span>
-          <span className="font-medium text-primary truncate max-w-[200px]" title={activeDoc?.title}>
-            {activeDoc ? activeDoc.title : 'Section 2.3 + 3 selected sources'}
+          <span className="text-on-surface-variant flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>Active Doc:</span>
+          </span>
+          <span className="font-medium text-primary truncate max-w-[190px]" title={activeDoc?.title}>
+            {activeDoc ? activeDoc.title : 'Active Draft Manuscript'}
           </span>
         </div>
       </div>
