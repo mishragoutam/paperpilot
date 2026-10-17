@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -41,6 +41,7 @@ export const Editor: React.FC = () => {
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [showAiResultModal, setShowAiResultModal] = useState(false);
   const [aiActionType, setAiActionType] = useState<string>('');
+  const selectedRange = useRef<{ from: number; to: number } | null>(null);
 
   const handleExport = (format: 'md' | 'html' | 'txt' | 'tex') => {
     if (!activeDoc) return;
@@ -103,7 +104,7 @@ export const Editor: React.FC = () => {
     ],
     content: activeDoc?.content || '',
     onUpdate: ({ editor }) => {
-      setSaveStatus('Saving changes...');
+      setSaveStatus('Saving...');
       const html = editor.getHTML();
       const text = editor.getText();
       const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
@@ -112,8 +113,11 @@ export const Editor: React.FC = () => {
 
       if (activeDocumentId) {
         updateDocumentContent(activeDocumentId, html, wordCount)
-          .then(() => setSaveStatus('Autosaved just now'))
-          .catch(() => setSaveStatus('Save error'));
+          .then(() => setSaveStatus('Saved'))
+          .catch((error: unknown) => {
+            console.error('Document autosave failed:', error);
+            setSaveStatus('Save failed');
+          });
       }
     },
     onSelectionUpdate: ({ editor }) => {
@@ -123,10 +127,14 @@ export const Editor: React.FC = () => {
         const text = editor.state.doc.textBetween(from, to, ' ');
         if (text.trim().length > 3) {
           setSelectedText(text);
+          selectedRange.current = { from, to };
           const domSelection = window.getSelection();
           if (domSelection && domSelection.rangeCount > 0) {
             const rect = domSelection.getRangeAt(0).getBoundingClientRect();
-            setFloatingMenuPos({ x: Math.max(20, rect.left), y: Math.max(170, rect.top - 44) });
+            // Clamp position to viewport bounds
+            const x = Math.max(20, Math.min(rect.left, window.innerWidth - 380));
+            const y = Math.max(100, rect.top - 48);
+            setFloatingMenuPos({ x, y });
             return;
           }
         }
@@ -134,6 +142,7 @@ export const Editor: React.FC = () => {
       if (!isAiGenerating && !showAiResultModal) {
         setFloatingMenuPos(null);
         setSelectedText('');
+        selectedRange.current = null;
       }
     }
   });
@@ -174,19 +183,19 @@ export const Editor: React.FC = () => {
     }
   }, [redoTrigger, editor]);
 
-  // --- Blazing Fast Streaming AI Actions ---
+  // --- AI Actions ---
   const handleAiAction = async (action: 'rewrite' | 'sources' | 'summarize') => {
     if (!selectedText || !editor) return;
 
     if (!geminiKey) {
-      alert('Please enter your Gemini API Key in Settings to activate the Gemini Fast Engine.');
+      alert('Please enter your Gemini API Key in Settings to use AI features.');
       return;
     }
 
     setIsAiGenerating(true);
     setShowAiResultModal(true);
     setAiActionType(action);
-    setAiStreamingText('⚡ Connecting to Gemini 2.0 Flash Turbo...');
+    setAiStreamingText('Connecting to Gemini...');
 
     let prompt = '';
     if (action === 'rewrite') {
@@ -198,13 +207,11 @@ export const Editor: React.FC = () => {
     }
 
     try {
-      let accumulated = '';
       await aiService.streamChatMessage(
         geminiKey,
         [],
         prompt,
         (chunk) => {
-          accumulated = chunk;
           setAiStreamingText(chunk);
         },
         activeDoc ? { title: activeDoc.title, content: activeDoc.content } : undefined,
@@ -212,7 +219,7 @@ export const Editor: React.FC = () => {
         aiSpeedMode || 'turbo'
       );
     } catch (e: any) {
-      setAiStreamingText(`⚠️ Gemini Fast Generation failed: ${e.message || String(e)}`);
+      setAiStreamingText(`⚠️ AI Generation failed: ${e.message || String(e)}`);
     } finally {
       setIsAiGenerating(false);
     }
@@ -220,10 +227,14 @@ export const Editor: React.FC = () => {
 
   const applyAiRewrite = () => {
     if (editor && aiStreamingText && !aiStreamingText.startsWith('⚠️')) {
-      editor.chain().focus().insertContent(aiStreamingText).run();
+      const range = selectedRange.current;
+      if (range) {
+        editor.chain().focus().insertContentAt(range, aiStreamingText).run();
+      }
       setShowAiResultModal(false);
       setFloatingMenuPos(null);
       setSelectedText('');
+      selectedRange.current = null;
     }
   };
 
@@ -231,6 +242,26 @@ export const Editor: React.FC = () => {
   const words = currentText.split(/\s+/).filter(Boolean).length;
   const chars = currentText.length;
   const readingTime = Math.max(1, Math.ceil(words / 220));
+
+  // Empty state when no document is selected
+  if (!activeDoc) {
+    return (
+      <section className="flex-1 h-full flex flex-col items-center justify-center bg-surface-container-low text-center p-8">
+        <span className="material-symbols-outlined text-[48px] text-outline mb-4">edit_document</span>
+        <h2 className="text-lg font-semibold text-on-surface mb-2">No Document Selected</h2>
+        <p className="text-sm text-on-surface-variant mb-6 max-w-md">
+          Open a project from the Projects Library or create a new document section from the sidebar to start writing.
+        </p>
+        <button
+          onClick={() => setCurrentView('library')}
+          className="px-4 py-2 bg-primary text-white rounded-lg font-medium text-sm hover:bg-primary-container transition-colors shadow-sm flex items-center gap-2"
+        >
+          <span className="material-symbols-outlined text-[18px]">folder_open</span>
+          Open Projects Library
+        </button>
+      </section>
+    );
+  }
 
   return (
     <section className="flex-1 h-full flex flex-col bg-surface-container-low overflow-hidden relative select-text">
@@ -245,85 +276,85 @@ export const Editor: React.FC = () => {
       {floatingMenuPos && (
         <div 
           style={{ position: 'fixed', left: `${floatingMenuPos.x}px`, top: `${floatingMenuPos.y}px` }}
-          className="z-50 bg-white dark:bg-[#1a2133] shadow-xl rounded-lg px-2 py-1 flex items-center gap-1.5 border border-blue-200 dark:border-blue-900/60 animate-in fade-in duration-150 select-none text-xs"
+          className="z-50 glass-panel shadow-xl rounded-lg px-2 py-1.5 flex items-center gap-1.5 animate-scale-in select-none text-xs"
         >
-          <div className="flex items-center gap-1 pr-1 border-r border-gray-200 dark:border-gray-700">
-            <span className="material-symbols-outlined text-[13px] text-blue-600 animate-pulse">bolt</span>
-            <span className="font-semibold text-blue-700 dark:text-blue-300 text-[10px]">Turbo</span>
+          <div className="flex items-center gap-1 pr-1.5 border-r border-outline-variant">
+            <span className="material-symbols-outlined text-[13px] text-primary animate-pulse">auto_awesome</span>
+            <span className="font-semibold text-primary text-[10px]">AI</span>
           </div>
 
           <button 
             onClick={() => handleAiAction('rewrite')}
             disabled={isAiGenerating}
-            className="px-2 py-0.5 rounded bg-[#106ebe] hover:bg-[#005a9e] text-white font-medium text-[11px] flex items-center gap-1 transition-colors shadow-xs"
+            className="px-2 py-0.5 rounded bg-primary hover:bg-primary-container text-white font-medium text-[11px] flex items-center gap-1 transition-colors shadow-xs"
           >
             <span className="material-symbols-outlined text-[12px]">auto_awesome</span>
-            <span>{isAiGenerating ? 'Streaming...' : 'Rewrite Rigor'}</span>
+            <span>{isAiGenerating ? 'Working...' : 'Rewrite'}</span>
           </button>
 
           <button 
             onClick={() => handleAiAction('sources')}
             disabled={isAiGenerating}
-            className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-[11px] flex items-center gap-1 transition-colors"
+            className="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-container-high text-on-surface text-[11px] flex items-center gap-1 transition-colors"
           >
-            <span className="material-symbols-outlined text-[12px] text-indigo-600">link</span>
+            <span className="material-symbols-outlined text-[12px] text-primary">link</span>
             <span>Sources</span>
-          </button>
-
-          <button 
-            onClick={() => setCurrentView('originality')}
-            className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-[11px] flex items-center gap-1 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[12px] text-emerald-600">verified</span>
-            <span>Originality</span>
           </button>
 
           <button 
             onClick={() => handleAiAction('summarize')}
             disabled={isAiGenerating}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300" 
+            className="p-1 rounded hover:bg-surface-container text-on-surface-variant" 
             title="Summarize Selection"
           >
             <span className="material-symbols-outlined text-[13px]">summarize</span>
           </button>
+
+          <button 
+            onClick={() => setCurrentView('originality')}
+            className="p-1 rounded hover:bg-surface-container text-on-surface-variant" 
+            title="Check Originality"
+          >
+            <span className="material-symbols-outlined text-[13px] text-emerald-600">verified</span>
+          </button>
         </div>
       )}
 
-      {/* Instant Streaming AI Preview Drawer / Modal */}
+      {/* AI Result Preview Modal */}
       {showAiResultModal && (
-        <div className="absolute top-3 right-6 z-50 w-96 bg-white dark:bg-[#1a2133] rounded-xl shadow-2xl border border-blue-200 dark:border-blue-900/60 p-4 animate-in slide-in-from-top-2 duration-200 select-text">
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-gray-800">
+        <div className="absolute top-3 right-6 z-50 w-96 glass-panel rounded-xl shadow-2xl p-4 animate-scale-in select-text">
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-outline-variant">
             <div className="flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[18px] text-blue-600 animate-pulse">auto_awesome</span>
-              <span className="font-semibold text-gray-900 dark:text-white text-xs">
-                {aiActionType === 'rewrite' ? '⚡ Gemini Academic Rewrite' : aiActionType === 'sources' ? '📚 Recommended Citations' : '📝 Passage Abstract'}
+              <span className="material-symbols-outlined text-[18px] text-primary animate-pulse">auto_awesome</span>
+              <span className="font-semibold text-on-surface text-xs">
+                {aiActionType === 'rewrite' ? 'Academic Rewrite' : aiActionType === 'sources' ? 'Recommended Citations' : 'Passage Summary'}
               </span>
             </div>
             <button
               onClick={() => { setShowAiResultModal(false); setFloatingMenuPos(null); }}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              className="text-on-surface-variant hover:text-on-surface rounded p-0.5 hover:bg-surface-container transition-colors"
             >
               <span className="material-symbols-outlined text-[16px]">close</span>
             </button>
           </div>
 
-          <div className="max-h-52 overflow-y-auto text-xs text-gray-800 dark:text-gray-200 leading-relaxed font-serif bg-gray-50 dark:bg-[#131926] p-3 rounded-md border border-gray-200 dark:border-gray-800 whitespace-pre-wrap">
+          <div className="max-h-52 overflow-y-auto text-xs text-on-surface leading-relaxed font-serif bg-surface-container-low p-3 rounded-md border border-outline-variant whitespace-pre-wrap">
             {aiStreamingText}
             {isAiGenerating && (
-              <span className="inline-block w-1.5 h-3.5 bg-blue-600 ml-1 animate-pulse"></span>
+              <span className="inline-block w-1.5 h-3.5 bg-primary ml-1 animate-pulse rounded-sm"></span>
             )}
           </div>
 
-          <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 text-xs">
-            <span className="text-[10px] text-gray-500 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-              <span>Gemini 2.0 Flash Turbo (Low Latency)</span>
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-outline-variant text-xs">
+            <span className="text-[10px] text-on-surface-variant flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-dot"></span>
+              <span>{db.settings?.activeModel || 'gemini-2.0-flash'}</span>
             </span>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowAiResultModal(false)}
-                className="px-2.5 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs font-medium"
+                className="px-2.5 py-1 rounded bg-surface-container text-on-surface hover:bg-surface-container-high text-xs font-medium transition-colors"
               >
                 Close
               </button>
@@ -331,7 +362,7 @@ export const Editor: React.FC = () => {
                 <button
                   onClick={applyAiRewrite}
                   disabled={isAiGenerating}
-                  className="px-3 py-1 rounded bg-[#106ebe] hover:bg-[#005a9e] text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-colors"
+                  className="px-3 py-1 rounded bg-primary hover:bg-primary-container text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-colors"
                 >
                   <span className="material-symbols-outlined text-[13px]">check</span>
                   <span>Replace Text</span>
@@ -342,65 +373,59 @@ export const Editor: React.FC = () => {
         </div>
       )}
 
-      {/* Microsoft Word Document Ruler (Header Margin & Tab Scale) */}
-      <div className="h-4 bg-[#f8f9fa] dark:bg-[#171f30] border-b border-[#e1e3e6] dark:border-[#263148] flex justify-center items-center select-none text-[8px] text-gray-400 font-mono tracking-widest">
-        <div className="w-full max-w-[780px] flex justify-between px-16">
+      {/* Document Ruler */}
+      <div className="h-4 bg-surface-container-lowest border-b border-outline-variant flex justify-center items-center select-none text-[8px] text-outline font-mono tracking-widest">
+        <div className="w-full max-w-[780px] flex justify-between px-6 sm:px-10 lg:px-16">
           <span>|···1···|···2···|···3···|···4···|···5···|···6···|···7···|</span>
         </div>
       </div>
 
       {/* Editor Canvas Scroll Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-8 flex justify-center bg-[#eaedf1] dark:bg-[#0f1422] relative">
-        {/* Physical Paper Sheet (Standard 8.5" x 11" Scholarly Page View) */}
-        <div className="w-full max-w-[800px] min-h-[980px] bg-white dark:bg-[#182133] shadow-[0_2px_12px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] rounded-sm px-16 py-14 flex flex-col justify-between relative transition-all border border-[#d6d9de] dark:border-[#2a354c]">
+      <div className="flex-1 overflow-y-auto px-4 py-8 flex justify-center bg-surface-container relative">
+        {/* Physical Paper Sheet */}
+        <div className="w-full max-w-[800px] min-h-[980px] bg-surface-container-lowest paper-sheet rounded px-6 sm:px-10 lg:px-16 py-10 sm:py-14 relative border border-outline-variant">
           <div className="prose max-w-none text-on-surface font-body-paper text-body-paper leading-relaxed">
             <EditorContent editor={editor} />
           </div>
-
-          {/* Academic Footnotes Section */}
-          <footer className="pt-8 mt-12 space-y-2 border-t border-surface-container select-none">
-            <div className="w-32 h-px bg-outline-variant"></div>
-            <div className="space-y-1 font-body-ui text-[11px] text-on-surface-variant">
-              <p>
-                <sup className="text-primary font-bold">1</sup> Lead researcher supported by Swiss National Science Foundation (SNSF) Grant #204128.
-              </p>
-              <p>
-                <sup className="text-secondary font-bold">2</sup> Contributed equally to experimental benchmark suite design and Datalog transpiler logic.
-              </p>
-            </div>
-          </footer>
         </div>
       </div>
 
       {/* Bottom Editor Status Bar */}
-      <footer className="h-6 px-4 bg-[#f3f4f6] dark:bg-[#161d2d] shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.02)] flex items-center justify-between font-label-sm text-[11px] text-gray-600 dark:text-gray-400 z-20 border-t border-[#dadce0] dark:border-[#263148] select-none">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1 font-medium text-gray-800 dark:text-gray-200">
+      <footer className="min-h-6 px-2 sm:px-4 py-1 bg-surface-container-lowest shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.02)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-label-sm text-[11px] text-on-surface-variant z-20 border-t border-outline-variant select-none">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <span className="flex items-center gap-1 font-medium text-on-surface">
             <span className="material-symbols-outlined text-[13px] text-primary">description</span>
             <span>Page 1 of 1</span>
           </span>
-          <span className="text-gray-300 dark:text-gray-700">•</span>
-          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+          <span className="hidden lg:inline text-outline-variant">•</span>
+          <span className="hidden lg:flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
             <span className="material-symbols-outlined text-[13px]">spellcheck</span>
-            <span>Spellcheck Clean</span>
+            <span>Proofing active</span>
           </span>
-          <span className="text-gray-300 dark:text-gray-700">•</span>
+          <span className="hidden xl:inline text-outline-variant">•</span>
           <button 
             onClick={() => setCurrentView('originality')}
-            className="flex items-center gap-1 text-primary font-medium hover:underline"
+            className="hidden xl:flex items-center gap-1 text-primary font-medium hover:underline"
           >
             <span className="material-symbols-outlined text-[13px]">verified</span>
-            <span>Originality: 98.4% Verified</span>
+            <span>Originality report</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-3 font-mono text-[10px]">
-          <span>
-            {words.toLocaleString()} words · {chars.toLocaleString()} chars · ~{readingTime} min
+        <div className="flex items-center gap-2 sm:gap-3 font-mono text-[10px] min-w-0">
+          <span className="whitespace-nowrap">
+            {words.toLocaleString()} words<span className="hidden sm:inline"> · {chars.toLocaleString()} chars · ~{readingTime} min</span>
           </span>
-          <span className="text-gray-300 dark:text-gray-700">•</span>
-          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-sans font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span className="hidden sm:inline text-outline-variant">•</span>
+          <span
+            role="status"
+            className={`flex items-center gap-1 font-sans font-medium ${
+              saveStatus === 'Save failed'
+                ? 'text-error'
+                : 'text-emerald-600 dark:text-emerald-400'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${saveStatus === 'Save failed' ? 'bg-error' : 'bg-emerald-500'}`}></span>
             <span>{saveStatus}</span>
           </span>
         </div>

@@ -186,9 +186,9 @@ export const WorkspaceRibbon: React.FC<WorkspaceRibbonProps> = ({
           File | Home | Insert | Design | Layout | References | Mailings | Review | View | Help
           On Right: Comments | Editing ∨ | Share ∨
       ========================================================================= */}
-      <div className="h-[34px] px-2 flex items-center justify-between border-b border-[#e1e3e6] dark:border-[#263148] text-xs">
+      <div className="h-[34px] px-2 flex items-center justify-between gap-2 border-b border-[#e1e3e6] dark:border-[#263148] text-xs min-w-0 overflow-hidden">
         {/* Left Tabs */}
-        <nav className="flex items-center h-full gap-0.5">
+        <nav className="flex items-center h-full gap-0.5 min-w-0 flex-1 overflow-x-auto scrollbar-none">
           {/* Word File Tab Button */}
           <div className="relative h-full flex items-center ribbon-dropdown-container">
             <button
@@ -279,7 +279,7 @@ export const WorkspaceRibbon: React.FC<WorkspaceRibbonProps> = ({
         </nav>
 
         {/* Right Section: Comments, Editing ∨, Share ∨ */}
-        <div className="flex items-center gap-1.5 ribbon-dropdown-container">
+        <div className="hidden 2xl:flex items-center gap-1.5 ribbon-dropdown-container">
           {/* Comments Button */}
           <button
             onClick={() => {}}

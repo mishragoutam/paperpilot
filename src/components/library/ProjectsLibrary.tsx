@@ -64,12 +64,22 @@ export const ProjectsLibrary: React.FC = () => {
     await createProject(title, `Draft initialized from ${templateName} template`, templateName);
   };
 
-  const filteredProjects = db.projects.filter(p => {
-    if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  const matchingProjects = db.projects.filter(p => {
+    const projectDocs = db.documents.filter(d => d.projectId === p.id);
+    const searchText = [p.title, p.description, p.template, ...projectDocs.map(d => d.title)]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    if (searchQuery && !searchText.includes(searchQuery.toLowerCase())) return false;
     if (activeCategory === 'preprints') return p.description.includes('Preprint') || p.template?.includes('arXiv');
     if (activeCategory === 'grants') return p.description.includes('Grant') || p.template?.includes('NIH');
     return true;
   });
+  const filteredProjects = activeCategory === 'recent'
+    ? [...matchingProjects]
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+      .slice(0, 5)
+    : matchingProjects;
 
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-screen overflow-y-auto select-none">

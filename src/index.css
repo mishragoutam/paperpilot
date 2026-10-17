@@ -4,48 +4,57 @@
 
 @layer base {
   :root {
-    --color-background: #faf8ff;
-    --color-surface: #faf8ff;
-    --color-surface-container-low: #f2f3ff;
-    --color-surface-container: #eaedff;
-    --color-surface-container-high: #e2e7ff;
-    --color-surface-container-highest: #dae2fd;
+    --color-background: #f8f9fc;
+    --color-surface: #f8f9fc;
+    --color-surface-container-low: #f0f2f8;
+    --color-surface-container: #e6e9f2;
+    --color-surface-container-high: #dde1ed;
+    --color-surface-container-highest: #d4d9e8;
     --color-surface-container-lowest: #ffffff;
-    --color-on-surface: #131b2e;
-    --color-on-surface-variant: #464555;
-    --color-outline: #777587;
-    --color-outline-variant: #c7c4d8;
-    --color-primary: #3525cd;
+    --color-on-surface: #111827;
+    --color-on-surface-variant: #4b5563;
+    --color-outline: #6b7280;
+    --color-outline-variant: #d1d5db;
+    --color-primary: #4338ca;
     --color-primary-container: #4f46e5;
     --color-secondary: #4648d4;
-    --color-tertiary: #004d70;
-    --color-tertiary-fixed: #c9e6ff;
-    --color-inverse-surface: #283044;
-    --color-inverse-on-surface: #eef0ff;
+    --color-tertiary: #0369a1;
+    --color-tertiary-fixed: #e0f2fe;
+    --color-inverse-surface: #1e293b;
+    --color-inverse-on-surface: #f1f5f9;
+    
+    /* Enhanced accent colors */
+    --color-accent-emerald: #059669;
+    --color-accent-amber: #d97706;
+    --color-accent-rose: #e11d48;
   }
 
   .dark {
-    --color-background: #0f1422;
-    --color-surface: #0f1422;
-    --color-surface-container-low: #141a2c;
-    --color-surface-container: #1c243c;
-    --color-surface-container-high: #242f4c;
-    --color-surface-container-highest: #2d3a5e;
-    --color-surface-container-lowest: #0a0e19;
-    --color-on-surface: #eef0ff;
-    --color-on-surface-variant: #a8b0c8;
-    --color-outline: #737c98;
-    --color-outline-variant: #2b3652;
-    --color-primary: #857bfd;
-    --color-primary-container: #4538d6;
-    --color-secondary: #8f91ff;
-    --color-tertiary: #7cc2f6;
-    --color-tertiary-fixed: #1d3a54;
-    --color-inverse-surface: #eef0ff;
-    --color-inverse-on-surface: #131b2e;
+    --color-background: #0c1222;
+    --color-surface: #0c1222;
+    --color-surface-container-low: #111827;
+    --color-surface-container: #1e293b;
+    --color-surface-container-high: #283548;
+    --color-surface-container-highest: #334155;
+    --color-surface-container-lowest: #080e1a;
+    --color-on-surface: #f1f5f9;
+    --color-on-surface-variant: #94a3b8;
+    --color-outline: #64748b;
+    --color-outline-variant: #1e293b;
+    --color-primary: #818cf8;
+    --color-primary-container: #4338ca;
+    --color-secondary: #a5b4fc;
+    --color-tertiary: #7dd3fc;
+    --color-tertiary-fixed: #0c4a6e;
+    --color-inverse-surface: #f1f5f9;
+    --color-inverse-on-surface: #111827;
   }
 
-  html, body {
+  html {
+    font-size: 16px;
+  }
+
+  body {
     margin: 0;
     padding: 0;
     @apply bg-background font-body-ui text-body-ui text-on-surface antialiased select-none;
@@ -59,20 +68,122 @@
   main > :last-child {
     margin-bottom: 0 !important;
   }
+
+  /* Smooth theme transition */
+  *, *::before, *::after {
+    transition-property: background-color, border-color;
+    transition-duration: 0.15s;
+    transition-timing-function: ease;
+  }
 }
 
+/* Custom scrollbar - subtle and elegant */
 ::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.35);
+}
+
+/* View transition animations */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-slide-in {
+  animation: fadeSlideIn 0.25s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-left {
+  animation: slideInLeft 0.2s ease-out;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.2s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.15s ease-out;
 }
 
 /* Editor specific styles for Tiptap */
 .ProseMirror {
   outline: none;
+  min-height: 400px;
 }
 
 .ProseMirror p {
   margin-bottom: 1em;
-  line-height: 1.75;
+  line-height: 1.8;
+  color: var(--color-on-surface);
 }
 
 .ProseMirror h1,
@@ -82,26 +193,79 @@
   font-weight: 600;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
+  color: var(--color-on-surface);
 }
 
 .ProseMirror h1 {
   font-size: 2rem;
+  line-height: 1.3;
 }
 
 .ProseMirror h2 {
   font-size: 1.5rem;
+  line-height: 1.35;
 }
 
 .ProseMirror h3 {
   font-size: 1.25rem;
+  line-height: 1.4;
 }
 
 .ProseMirror blockquote {
-  border-left: 3px solid #4d44e3;
+  border-left: 3px solid var(--color-primary);
   padding-left: 1rem;
   font-style: italic;
-  color: #464555;
+  color: var(--color-on-surface-variant);
   margin: 1.5rem 0;
+  background: var(--color-surface-container-low);
+  padding: 0.75rem 1rem;
+  border-radius: 0 4px 4px 0;
+}
+
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--color-outline-variant);
+  margin: 2rem 0;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1em;
+}
+
+.ProseMirror li {
+  line-height: 1.8;
+}
+
+.ProseMirror code {
+  background: var(--color-surface-container);
+  padding: 0.15rem 0.35rem;
+  border-radius: 3px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.875em;
+  color: var(--color-primary);
+}
+
+.ProseMirror a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.ProseMirror sup {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-outline);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
 }
 
 /* Page Break Styling: Physical visual separation between pages */
@@ -161,6 +325,44 @@
   color: var(--color-outline);
 }
 
+/* Dropdown overlay backdrop */
+.dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.modal-content {
+  animation: scaleIn 0.2s ease-out;
+}
+
+/* Tooltip styles */
+.tooltip-trigger {
+  position: relative;
+}
+
+/* Focus visible ring for keyboard navigation */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 @media print {
   .paper-page-break {
     page-break-after: always;
@@ -168,4 +370,3 @@
     display: none;
   }
 }
-

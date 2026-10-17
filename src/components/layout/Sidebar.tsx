@@ -11,7 +11,6 @@ export const Sidebar: React.FC = () => {
     setActiveDocument, 
     createDocument,
     deleteDocument,
-    ribbonCollapsed 
   } = useAppStore();
 
   const [filterQuery, setFilterQuery] = useState('');
@@ -45,16 +44,16 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="fixed left-0 top-[72px] bottom-0 w-64 bg-surface-container-low z-40 flex flex-col border-r border-surface-container select-none">
+    <aside className="workspace-sidebar fixed left-0 top-[72px] bottom-0 w-64 bg-surface-container-low z-40 flex flex-col border-r border-surface-container select-none animate-slide-left">
       {/* Sidebar Header & Active Project Breadcrumb */}
       <div className="p-space-sm border-b border-surface-container bg-surface-container-low">
-        <div className="flex items-center justify-between mb-1">
-          <span className="font-label-sm text-[11px] uppercase font-semibold text-on-surface-variant tracking-wider">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="font-label-sm text-[10px] uppercase font-semibold text-on-surface-variant tracking-wider">
             Project Sections
           </span>
           <button 
             onClick={() => setCreatingDoc(true)}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-surface-container-high text-primary hover:text-primary-container transition-colors" 
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-surface-container-high text-primary transition-colors" 
             type="button"
             title="Add Section / Document"
           >
@@ -62,7 +61,7 @@ export const Sidebar: React.FC = () => {
           </button>
         </div>
         {activeProject && (
-          <div className="text-[11px] font-medium text-on-surface truncate" title={activeProject.title}>
+          <div className="text-[11px] font-medium text-on-surface truncate px-0.5" title={activeProject.title}>
             {activeProject.title}
           </div>
         )}
@@ -70,43 +69,43 @@ export const Sidebar: React.FC = () => {
 
       {/* Quick Filter */}
       <div className="p-space-xs border-b border-surface-container">
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-surface-container-lowest border border-outline-variant">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-surface-container-lowest border border-outline-variant focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all">
           <span className="material-symbols-outlined text-outline text-[14px]">search</span>
           <input 
             className="w-full bg-transparent font-label-sm text-label-sm text-on-surface focus:outline-none placeholder:text-outline" 
-            placeholder="Filter sections... (⌘K)" 
+            placeholder="Filter sections..." 
             type="text"
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
           />
           {filterQuery && (
-            <button onClick={() => setFilterQuery('')} className="text-outline hover:text-on-surface text-[12px]">✕</button>
+            <button onClick={() => setFilterQuery('')} className="text-outline hover:text-on-surface text-[12px] p-0.5 rounded hover:bg-surface-container transition-colors">✕</button>
           )}
         </div>
       </div>
 
       {/* Add Document Inline Form */}
       {creatingDoc && (
-        <form onSubmit={handleCreateDoc} className="p-2 border-b border-surface-container bg-surface-container-lowest animate-in fade-in duration-150">
+        <form onSubmit={handleCreateDoc} className="p-2 border-b border-surface-container bg-surface-container-lowest animate-fade-slide-in">
           <input
             autoFocus
             type="text"
             placeholder="e.g. 2. Methodology & System Architecture"
             value={newDocTitle}
             onChange={(e) => setNewDocTitle(e.target.value)}
-            className="w-full text-xs p-1.5 border border-primary rounded bg-surface text-on-surface focus:outline-none mb-1.5"
+            className="w-full text-xs p-1.5 border border-primary rounded bg-surface text-on-surface focus:outline-none focus:ring-1 focus:ring-primary mb-1.5"
           />
           <div className="flex justify-end gap-1 text-[11px]">
             <button
               type="button"
               onClick={() => setCreatingDoc(false)}
-              className="px-2 py-0.5 rounded text-outline hover:text-on-surface"
+              className="px-2 py-0.5 rounded text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-2.5 py-0.5 rounded bg-primary text-on-primary font-medium"
+              className="px-2.5 py-0.5 rounded bg-primary text-white font-medium hover:bg-primary-container transition-colors"
             >
               Add Section
             </button>
@@ -118,12 +117,12 @@ export const Sidebar: React.FC = () => {
       <div className="flex-1 overflow-y-auto px-1 py-1.5 space-y-0.5">
         <div className="px-2 py-1 text-[10px] font-semibold text-outline uppercase tracking-wider flex items-center justify-between">
           <span>Manuscript Sections</span>
-          <span>{allProjectDocs.length}</span>
+          <span className="bg-surface-container px-1.5 py-0.5 rounded font-label-code text-[9px]">{allProjectDocs.length}</span>
         </div>
 
         {filteredDocs.length === 0 ? (
-          <div className="p-3 text-center text-xs text-outline italic">
-            No matching sections found.
+          <div className="p-4 text-center text-xs text-outline italic">
+            {filterQuery ? 'No matching sections found.' : 'No document sections yet.'}
           </div>
         ) : (
           filteredDocs.map((doc) => {
@@ -135,9 +134,9 @@ export const Sidebar: React.FC = () => {
                   setActiveDocument(doc.id);
                   setCurrentView('workspace');
                 }}
-                className={`w-full group flex items-center justify-between px-2.5 py-1.5 rounded cursor-pointer transition-all ${
+                className={`w-full group flex items-center justify-between px-2.5 py-2 rounded cursor-pointer transition-all ${
                   isActive
-                    ? 'bg-surface-container-high text-primary font-medium border-l-2 border-primary shadow-xs'
+                    ? 'bg-primary/10 text-primary font-medium border-l-2 border-primary shadow-xs'
                     : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
                 }`}
               >
@@ -157,7 +156,7 @@ export const Sidebar: React.FC = () => {
                   {allProjectDocs.length > 1 && (
                     <button
                       onClick={(e) => handleDeleteDoc(e, doc.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-error text-outline transition-opacity rounded"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-error text-outline transition-opacity rounded hover:bg-surface-container"
                       title="Delete section"
                     >
                       <span className="material-symbols-outlined text-[13px]">delete</span>
@@ -170,66 +169,45 @@ export const Sidebar: React.FC = () => {
         )}
 
         {/* Section 2: Quick Tool Navigation */}
-        <div className="pt-3 pb-1 px-2 text-[10px] font-semibold text-outline uppercase tracking-wider border-t border-surface-container mt-2">
+        <div className="pt-3 pb-1 px-2 text-[10px] font-semibold text-outline uppercase tracking-wider border-t border-surface-container mt-3">
           Workspace Modules
         </div>
 
-        <button 
-          onClick={() => setCurrentView('library')}
-          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded transition-colors text-left ${
-            currentView === 'library' 
-              ? 'bg-surface-container-high text-primary font-medium border-l-2 border-primary' 
-              : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface text-xs'
-          }`}
-        >
-          <span className="flex items-center gap-2 truncate">
-            <span className="material-symbols-outlined text-[16px]">folder_copy</span>
-            <span className="truncate">Projects &amp; Corpus</span>
-          </span>
-          <span className="font-label-code text-[10px] text-outline">{db.projects.length}</span>
-        </button>
-
-        <button 
-          onClick={() => setCurrentView('originality')}
-          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded transition-colors text-left ${
-            currentView === 'originality' 
-              ? 'bg-surface-container-high text-primary font-medium border-l-2 border-primary' 
-              : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface text-xs'
-          }`}
-        >
-          <span className="flex items-center gap-2 truncate">
-            <span className="material-symbols-outlined text-[16px]">verified</span>
-            <span className="truncate">Originality Audit</span>
-          </span>
-          <span className="text-tertiary font-medium text-[10px]">98%</span>
-        </button>
-
-        <button 
-          onClick={() => setCurrentView('settings')}
-          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded transition-colors text-left ${
-            currentView === 'settings' 
-              ? 'bg-surface-container-high text-primary font-medium border-l-2 border-primary' 
-              : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface text-xs'
-          }`}
-        >
-          <span className="flex items-center gap-2 truncate">
-            <span className="material-symbols-outlined text-[16px]">tune</span>
-            <span className="truncate">Styles &amp; AI Config</span>
-          </span>
-        </button>
+        {[
+          { view: 'library' as const, icon: 'folder_copy', label: 'Projects & Corpus', badge: String(db.projects.length) },
+          { view: 'originality' as const, icon: 'verified', label: 'Originality Audit', badge: 'Open', badgeClass: 'text-emerald-600 dark:text-emerald-400' },
+          { view: 'settings' as const, icon: 'tune', label: 'Styles & AI Config', badge: '' },
+        ].map(item => (
+          <button
+            key={item.view}
+            onClick={() => setCurrentView(item.view)}
+            className={`w-full flex items-center justify-between px-2.5 py-2 rounded transition-all text-left text-xs ${
+              currentView === item.view 
+                ? 'bg-primary/10 text-primary font-medium border-l-2 border-primary' 
+                : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+            }`}
+          >
+            <span className="flex items-center gap-2 truncate">
+              <span className="material-symbols-outlined text-[16px]">{item.icon}</span>
+              <span className="truncate">{item.label}</span>
+            </span>
+            {item.badge && (
+              <span className={`font-label-code text-[10px] ${item.badgeClass || 'text-outline'}`}>{item.badge}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Engine Status Footer */}
       <div className="p-space-sm border-t border-surface-container bg-surface-container-lowest">
         <div className="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
           <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-            <span>Local Vault Sync</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 status-dot"></span>
+            <span>Local storage</span>
           </span>
-          <span className="font-label-code text-label-code text-outline">{allProjectDocs.length} Secs</span>
+          <span className="font-label-code text-label-code text-outline">{allProjectDocs.length} Sections</span>
         </div>
       </div>
     </aside>
   );
 };
-

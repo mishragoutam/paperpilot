@@ -4,7 +4,7 @@ import { aiService } from '../../services/ai';
 import type { Source } from '../../services/db';
 
 export const ResearchDesk: React.FC = () => {
-  const { db, addSources, activeProjectId, insertCitation } = useAppStore();
+  const { db, addSources, activeProjectId, insertCitation, markSourceCited } = useAppStore();
   const geminiKey = db.settings?.geminiKey || '';
 
   const [query, setQuery] = useState('');
@@ -41,7 +41,7 @@ export const ResearchDesk: React.FC = () => {
           abstract: r.abstract || '',
           accessedAt: new Date().toISOString(),
           notes: '',
-          semanticMatch: r.semanticMatch || `${Math.floor(88 + Math.random() * 11)}%`,
+          semanticMatch: r.semanticMatch,
           tag: r.tag || 'Peer-Reviewed'
         }));
         await addSources(fullSources);
@@ -83,9 +83,12 @@ export const ResearchDesk: React.FC = () => {
           tag: 'Open Access'
         }));
         await addSources(mapped);
+      } else {
+        alert('No new academic papers were found for this project.');
       }
     } catch (e) {
       console.error(e);
+      alert(e instanceof Error ? e.message : 'Could not refresh academic sources.');
     } finally {
       setTimeout(() => setIsRefreshing(false), 800);
     }
@@ -96,10 +99,14 @@ export const ResearchDesk: React.FC = () => {
     const cleanAuthor = source.authors.split(' ')[0] || 'Author';
     const citationTag = `[${cleanAuthor} et al., ${source.publishedAt}]`;
     insertCitation(citationTag);
+    void markSourceCited(source.id).catch((error: unknown) => {
+      console.error('Could not mark source as cited:', error);
+    });
   };
 
   const filteredSources = db.sources.filter(s => {
-    if (activeFilter === 'cited') return s.notes?.includes('cited') || s.id === 'src-1';
+    if (activeFilter === 'cited') return s.notes?.includes('[cited]');
+    if (activeFilter === 'saved') return s.projectId === activeProjectId;
     if (activeFilter === 'pdfs') return Boolean(s.url || s.doi);
     return true;
   });
@@ -174,7 +181,7 @@ export const ResearchDesk: React.FC = () => {
               : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
           }`}
         >
-          Cited (1)
+          Cited ({db.sources.filter(s => s.notes?.includes('[cited]')).length})
         </button>
         <button 
           onClick={() => setActiveFilter('saved')}
@@ -184,7 +191,7 @@ export const ResearchDesk: React.FC = () => {
               : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
           }`}
         >
-          Saved ({db.sources.length})
+          Saved ({db.sources.filter(s => s.projectId === activeProjectId).length})
         </button>
         <button 
           onClick={() => setActiveFilter('pdfs')}
@@ -217,9 +224,11 @@ export const ResearchDesk: React.FC = () => {
               <h4 className="font-body-ui-medium text-[12px] leading-tight text-on-surface line-clamp-2 group-hover:text-primary transition-colors select-text">
                 {source.title}
               </h4>
-              <span className="shrink-0 font-label-code text-[10px] text-tertiary bg-tertiary-fixed px-1 rounded font-medium">
-                {source.semanticMatch || `${94 - idx * 3}%`}
-              </span>
+              {source.semanticMatch && (
+                <span className="shrink-0 font-label-code text-[10px] text-tertiary bg-tertiary-fixed px-1 rounded font-medium" title="Relevance estimate">
+                  {source.semanticMatch} match
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-1 text-[10px] font-label-sm text-on-surface-variant flex-wrap">

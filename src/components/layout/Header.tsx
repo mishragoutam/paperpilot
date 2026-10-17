@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 
 export const Header: React.FC = () => {
@@ -15,17 +15,34 @@ export const Header: React.FC = () => {
     triggerRedo,
     activeProjectId,
     updateProjectTemplate,
-    aiSpeedMode,
+    leftPanelOpen,
+    rightPanelOpen,
   } = useAppStore();
 
   const [exportOpen, setExportOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+  const templateRef = useRef<HTMLDivElement>(null);
 
   const activeDoc = db.documents.find(d => d.id === activeDocumentId);
   const activeProject = db.projects.find(p => p.id === activeProjectId);
   const currentTemplate = activeProject?.template || 'IEEE Transactions';
   const wordCount = activeDoc ? activeDoc.wordCount : 0;
   const citationCount = db.sources.length;
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+      if (templateRef.current && !templateRef.current.contains(e.target as Node)) {
+        setTemplateOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleExport = (format: 'md' | 'html' | 'txt' | 'tex') => {
     if (!activeDoc) return;
@@ -106,18 +123,25 @@ ${plain}
     (window as any).electronAPI?.close?.();
   };
 
+  const navItems: { key: string; label: string; view: typeof currentView }[] = [
+    { key: 'workspace', label: 'Workspace', view: 'workspace' },
+    { key: 'library', label: 'Projects Library', view: 'library' },
+    { key: 'originality', label: 'Originality Report', view: 'originality' },
+    { key: 'settings', label: 'Settings', view: 'settings' },
+  ];
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-surface-container-low shadow-[0_1px_8px_rgba(0,0,0,0.04)] select-none">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-surface-container-low shadow-[0_1px_6px_rgba(0,0,0,0.06)] select-none">
       {/* Primary OS App Bar (h-10) */}
-      <div className="h-10 px-gutter-compact flex items-center justify-between border-b border-surface-container">
+      <div className="h-[40px] px-gutter-compact flex items-center justify-between gap-2 border-b border-surface-container overflow-hidden">
         {/* Left Section: Brand & Active Document Breadcrumb */}
-        <div className="flex items-center gap-space-sm min-w-0">
+        <div className="flex items-center gap-space-sm min-w-0 flex-1">
           <div 
             onClick={() => setCurrentView('workspace')}
-            className="flex items-center gap-space-xs cursor-pointer hover:opacity-85 transition-opacity"
+            className="flex items-center gap-space-xs cursor-pointer hover:opacity-80 transition-opacity"
           >
-            <div className="w-5 h-5 rounded bg-[#106ebe] text-white flex items-center justify-center font-bold text-[12px] shadow-xs">
-              W
+            <div className="w-5 h-5 rounded bg-gradient-to-br from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-bold text-[11px] shadow-sm">
+              P
             </div>
             <span className="font-label-md text-label-md font-semibold tracking-tight text-on-surface">PaperPilot</span>
           </div>
@@ -125,21 +149,21 @@ ${plain}
           <div className="h-3 w-px bg-outline-variant mx-space-xs"></div>
 
           {/* Active Document Indicator */}
-          <div className="flex items-center gap-space-xs bg-surface-container-lowest px-space-sm py-0.5 rounded border border-outline-variant max-w-[260px] lg:max-w-md">
+          <div className="flex items-center gap-space-xs bg-surface-container-lowest px-space-sm py-0.5 rounded border border-outline-variant max-w-[100px] sm:max-w-[180px] lg:max-w-[260px] 2xl:max-w-md min-w-0">
             <span className="material-symbols-outlined text-outline text-[14px]">description</span>
             <span className="font-label-code text-label-code text-on-surface truncate" title={activeDoc?.title}>
-              {activeDoc ? activeDoc.title : 'Neural-Symbolic Architectures in Automated Literature Synthesis.docx'}
+              {activeDoc ? activeDoc.title : 'No document selected'}
             </span>
           </div>
 
           {/* Local Vault Sync Pill */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container text-tertiary font-label-sm text-label-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-tertiary-container animate-pulse"></span>
-            <span>Saved to Local Vault</span>
+          <div className="hidden 2xl:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-label-sm text-label-sm border border-emerald-200 dark:border-emerald-800">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-dot"></span>
+            <span>Local Vault</span>
           </div>
 
           {/* Undo / Redo Micro Actions */}
-          <div className="flex items-center gap-0.5">
+          <div className="hidden xl:flex items-center gap-0.5">
             <button 
               onClick={triggerUndo}
               className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" 
@@ -159,42 +183,30 @@ ${plain}
           </div>
         </div>
 
-        {/* Right Section: Speed Indicator, Templates, Export & Controls */}
-        <div className="flex items-center gap-space-sm">
-          {/* Gemini Flash Turbo Speed Pill */}
-          <button 
-            onClick={() => setCurrentView('settings')}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-label-sm text-label-sm hover:bg-emerald-500/20 transition-colors"
-            title="Gemini 2.0 Flash Turbo is active (Instant Low-Latency Mode)"
-          >
-            <span className="material-symbols-outlined text-[13px] text-emerald-600 animate-pulse">bolt</span>
-            <span className="font-semibold">⚡ Gemini Turbo</span>
-          </button>
-
+        {/* Right Section: Templates, Export & Controls */}
+        <div className="flex items-center gap-1 shrink-0">
           {/* Originality Badge Button */}
           <button 
             onClick={() => setCurrentView('originality')}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container border border-surface-container-high font-label-sm text-label-sm text-tertiary hover:bg-surface-container-high transition-colors"
+            className="hidden 2xl:flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container border border-surface-container-high font-label-sm text-label-sm text-on-surface-variant hover:bg-surface-container-high transition-colors"
             title="Open Originality & Similarity Report"
           >
-            <span className="material-symbols-outlined text-[13px] text-tertiary">verified</span>
-            <span>98% Unique</span>
-            <span className="text-outline text-[10px]">•</span>
-            <span className="text-on-surface-variant">Checked</span>
+            <span className="material-symbols-outlined text-[13px] text-emerald-600 dark:text-emerald-400">verified</span>
+            <span>Originality</span>
           </button>
 
           {/* Template Selector Dropdown */}
-          <div className="relative">
+          <div className="relative hidden xl:block" ref={templateRef}>
             <button 
-              onClick={() => setTemplateOpen(!templateOpen)}
+              onClick={() => { setTemplateOpen(!templateOpen); setExportOpen(false); }}
               className="flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container hover:bg-surface-container-high text-on-surface font-label-sm text-label-sm transition-colors" 
               type="button"
             >
               <span className="truncate max-w-[110px]">{currentTemplate}</span>
-              <span className="material-symbols-outlined text-[13px]">expand_more</span>
+              <span className={`material-symbols-outlined text-[13px] transition-transform ${templateOpen ? 'rotate-180' : ''}`}>expand_more</span>
             </button>
             {templateOpen && (
-              <div className="absolute right-0 top-full mt-1 w-44 bg-surface-container-lowest rounded shadow-lg border border-surface-container py-1 z-50 text-xs">
+              <div className="absolute right-0 top-full mt-1 w-44 bg-surface-container-lowest rounded-lg shadow-lg border border-surface-container py-1 z-50 text-xs animate-scale-in">
                 {['IEEE Transactions', 'Nature Conference', 'ACM SIGCHI', 'APA 7th Edition', 'NIH Grant Proposal', 'arXiv Preprint'].map((tmpl) => (
                   <button 
                     key={tmpl}
@@ -202,10 +214,10 @@ ${plain}
                       if (activeProjectId) updateProjectTemplate(activeProjectId, tmpl);
                       setTemplateOpen(false);
                     }} 
-                    className={`w-full text-left px-3 py-1.5 hover:bg-surface-container text-on-surface flex items-center justify-between ${currentTemplate === tmpl ? 'font-semibold text-primary' : ''}`}
+                    className={`w-full text-left px-3 py-1.5 hover:bg-surface-container text-on-surface flex items-center justify-between transition-colors ${currentTemplate === tmpl ? 'font-semibold text-primary' : ''}`}
                   >
                     <span>{tmpl}</span>
-                    {currentTemplate === tmpl && <span className="material-symbols-outlined text-[14px]">check</span>}
+                    {currentTemplate === tmpl && <span className="material-symbols-outlined text-[14px] text-primary">check</span>}
                   </button>
                 ))}
               </div>
@@ -213,30 +225,30 @@ ${plain}
           </div>
 
           {/* Export Dropdown Button */}
-          <div className="relative">
+          <div className="relative" ref={exportRef}>
             <button 
-              onClick={() => setExportOpen(!exportOpen)}
-              className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-primary text-on-primary hover:bg-primary-container font-label-sm text-label-sm transition-colors shadow-xs" 
+              onClick={() => { setExportOpen(!exportOpen); setTemplateOpen(false); }}
+              className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-primary text-white hover:bg-primary-container font-label-sm text-label-sm transition-colors shadow-sm" 
               type="button"
             >
               <span>Export</span>
-              <span className="material-symbols-outlined text-[13px]">file_download</span>
+              <span className={`material-symbols-outlined text-[13px] transition-transform ${exportOpen ? 'rotate-180' : ''}`}>file_download</span>
             </button>
             {exportOpen && (
-              <div className="absolute right-0 top-full mt-1 w-52 bg-surface-container-lowest rounded shadow-lg border border-surface-container py-1 z-50 text-xs">
-                <button onClick={() => handleExport('md')} className="w-full text-left px-3 py-1.5 hover:bg-surface-container flex items-center gap-2 text-on-surface">
+              <div className="absolute right-0 top-full mt-1 w-52 bg-surface-container-lowest rounded-lg shadow-lg border border-surface-container py-1 z-50 text-xs animate-scale-in">
+                <button onClick={() => handleExport('md')} className="w-full text-left px-3 py-2 hover:bg-surface-container flex items-center gap-2 text-on-surface transition-colors">
                   <span className="material-symbols-outlined text-[15px] text-primary">markdown</span>
                   <span>Markdown (.md)</span>
                 </button>
-                <button onClick={() => handleExport('tex')} className="w-full text-left px-3 py-1.5 hover:bg-surface-container flex items-center gap-2 text-on-surface">
+                <button onClick={() => handleExport('tex')} className="w-full text-left px-3 py-2 hover:bg-surface-container flex items-center gap-2 text-on-surface transition-colors">
                   <span className="material-symbols-outlined text-[15px] text-tertiary">functions</span>
                   <span>LaTeX Source (.tex)</span>
                 </button>
-                <button onClick={() => handleExport('html')} className="w-full text-left px-3 py-1.5 hover:bg-surface-container flex items-center gap-2 text-on-surface">
+                <button onClick={() => handleExport('html')} className="w-full text-left px-3 py-2 hover:bg-surface-container flex items-center gap-2 text-on-surface transition-colors">
                   <span className="material-symbols-outlined text-[15px] text-secondary">html</span>
                   <span>Standalone HTML (.html)</span>
                 </button>
-                <button onClick={() => handleExport('txt')} className="w-full text-left px-3 py-1.5 hover:bg-surface-container flex items-center gap-2 text-on-surface">
+                <button onClick={() => handleExport('txt')} className="w-full text-left px-3 py-2 hover:bg-surface-container flex items-center gap-2 text-on-surface transition-colors">
                   <span className="material-symbols-outlined text-[15px] text-outline">description</span>
                   <span>Plain Text (.txt)</span>
                 </button>
@@ -246,22 +258,26 @@ ${plain}
 
           {/* Dock & View Toggle Buttons */}
           <div className="flex items-center gap-0.5 text-on-surface-variant">
-            <button 
-              onClick={toggleLeftPanel} 
-              className="w-6 h-6 flex items-center justify-center rounded hover:bg-surface-container-high hover:text-on-surface transition-colors" 
-              title="Toggle Left Desk" 
-              type="button"
-            >
-              <span className="material-symbols-outlined text-[15px]">dock_to_left</span>
-            </button>
-            <button 
-              onClick={toggleRightPanel} 
-              className="w-6 h-6 flex items-center justify-center rounded hover:bg-surface-container-high hover:text-on-surface transition-colors" 
-              title="Toggle AI Copilot" 
-              type="button"
-            >
-              <span className="material-symbols-outlined text-[15px]">dock_to_right</span>
-            </button>
+            {currentView === 'workspace' && (
+              <>
+                <button 
+                  onClick={toggleLeftPanel} 
+                  className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${leftPanelOpen ? 'bg-surface-container text-primary' : 'hover:bg-surface-container-high hover:text-on-surface'}`}
+                  title="Toggle Research Desk" 
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[15px]">dock_to_left</span>
+                </button>
+                <button 
+                  onClick={toggleRightPanel} 
+                  className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${rightPanelOpen ? 'bg-surface-container text-primary' : 'hover:bg-surface-container-high hover:text-on-surface'}`}
+                  title="Toggle AI Copilot" 
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[15px]">dock_to_right</span>
+                </button>
+              </>
+            )}
             <button 
               onClick={toggleTheme} 
               className="w-6 h-6 flex items-center justify-center rounded hover:bg-surface-container-high hover:text-on-surface transition-colors" 
@@ -269,7 +285,7 @@ ${plain}
               type="button"
             >
               <span className="material-symbols-outlined text-[15px]">
-                {theme === 'dark' ? 'dark_mode' : 'light_mode'}
+                {theme === 'dark' ? 'light_mode' : 'dark_mode'}
               </span>
             </button>
             <button 
@@ -283,15 +299,15 @@ ${plain}
           </div>
 
           {/* User profile avatar badge */}
-          <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary text-[14px]">person</span>
+          <div className="hidden xl:flex w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 items-center justify-center shrink-0 shadow-sm">
+            <span className="material-symbols-outlined text-white text-[14px]">person</span>
           </div>
 
           {/* Desktop Window Controls */}
           <div className="flex items-center ml-1">
             <button 
               onClick={handleMinimize}
-              className="w-7 h-6 flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" 
+              className="w-7 h-6 flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" 
               type="button"
               title="Minimize"
             >
@@ -299,7 +315,7 @@ ${plain}
             </button>
             <button 
               onClick={handleMaximize}
-              className="w-7 h-6 flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface" 
+              className="w-7 h-6 flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" 
               type="button"
               title="Maximize"
             >
@@ -307,7 +323,7 @@ ${plain}
             </button>
             <button 
               onClick={handleClose}
-              className="w-7 h-6 flex items-center justify-center text-on-surface-variant hover:bg-error hover:text-on-error" 
+              className="w-7 h-6 flex items-center justify-center text-on-surface-variant hover:bg-error hover:text-on-error rounded-sm transition-colors" 
               type="button"
               title="Close"
             >
@@ -318,54 +334,28 @@ ${plain}
       </div>
 
       {/* Sub-Header Navigation Ribbon (h-8) */}
-      <div className="h-8 px-gutter-compact bg-surface-container-lowest flex items-center justify-between border-b border-surface-container">
-        <nav className="flex items-center gap-1">
-          <button 
-            onClick={() => setCurrentView('workspace')} 
-            className={`px-3 py-1 rounded transition-colors text-xs font-medium ${
-              currentView === 'workspace' 
-                ? 'bg-surface-container text-primary font-semibold' 
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-            }`}
-          >
-            Workspace
-          </button>
-          <button 
-            onClick={() => setCurrentView('library')} 
-            className={`px-3 py-1 rounded transition-colors text-xs font-medium ${
-              currentView === 'library' 
-                ? 'bg-surface-container text-primary font-semibold' 
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-            }`}
-          >
-            Projects Library
-          </button>
-          <button 
-            onClick={() => setCurrentView('originality')} 
-            className={`px-3 py-1 rounded transition-colors text-xs font-medium ${
-              currentView === 'originality' 
-                ? 'bg-surface-container text-primary font-semibold' 
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-            }`}
-          >
-            Originality Report
-          </button>
-          <button 
-            onClick={() => setCurrentView('settings')} 
-            className={`px-3 py-1 rounded transition-colors text-xs font-medium ${
-              currentView === 'settings' 
-                ? 'bg-surface-container text-primary font-semibold' 
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-            }`}
-          >
-            Settings
-          </button>
+      <div className="h-[32px] px-gutter-compact bg-surface-container-lowest flex items-center justify-between gap-2 border-b border-surface-container min-w-0">
+        <nav className="flex items-center gap-0.5 min-w-0 overflow-x-auto scrollbar-none">
+          {navItems.map(item => (
+            <button 
+              key={item.key}
+              onClick={() => setCurrentView(item.view)} 
+              className={`px-3 py-1 rounded transition-all text-xs font-medium relative ${
+                currentView === item.view 
+                  ? 'bg-surface-container text-primary font-semibold' 
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+              }`}
+            >
+              {item.label}
+              {currentView === item.view && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-primary rounded-full"></span>
+              )}
+            </button>
+          ))}
         </nav>
 
         {/* Live Academic Telemetry */}
-        <div className="flex items-center gap-space-md font-label-sm text-label-sm text-on-surface-variant">
-          <span>Sync: <strong className="font-medium text-on-surface">Zotero + Mendeley (Active)</strong></span>
-          <span className="text-outline-variant">|</span>
+        <div className="hidden lg:flex items-center gap-space-md font-label-sm text-label-sm text-on-surface-variant">
           <span>Words: <strong className="font-medium text-on-surface">{wordCount.toLocaleString()}</strong></span>
           <span className="text-outline-variant">|</span>
           <span>Citations: <strong className="font-medium text-on-surface">{citationCount} Verified</strong></span>

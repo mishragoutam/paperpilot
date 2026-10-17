@@ -41,6 +41,7 @@ interface AppState {
   deleteDocument: (id: string) => Promise<void>;
   updateDocumentContent: (id: string, content: string, wordCount: number) => Promise<void>;
   addSources: (newSources: Source[]) => Promise<void>;
+  markSourceCited: (id: string) => Promise<void>;
   insertCitation: (citation: string) => void;
   clearPendingCitation: () => void;
   triggerUndo: () => void;
@@ -51,13 +52,23 @@ interface AppState {
 }
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-const debouncedWriteDb = (db: Database) => {
-  if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
-    dbService.writeDb(db);
-    saveTimeout = null;
-  }, 750);
-};
+let pendingSaveCallbacks: Array<{ resolve: () => void; reject: (reason?: unknown) => void }> = [];
+const debouncedWriteDb = (getDb: () => Database) =>
+  new Promise<void>((resolve, reject) => {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    pendingSaveCallbacks.push({ resolve, reject });
+    saveTimeout = setTimeout(async () => {
+      saveTimeout = null;
+      const callbacks = pendingSaveCallbacks;
+      pendingSaveCallbacks = [];
+      try {
+        await dbService.writeDb(getDb());
+        callbacks.forEach(callback => callback.resolve());
+      } catch (error) {
+        callbacks.forEach(callback => callback.reject(error));
+      }
+    }, 750);
+  });
 
 export const useAppStore = create<AppState>((set, get) => ({
   db: { projects: [], documents: [], sources: [], settings: {} },
@@ -236,7 +247,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Immediately update memory store so UI is 100% responsive
     set({ db: newDb });
     // Debounce disk I/O to avoid thrashing disk on every single keystroke
-    debouncedWriteDb(newDb);
+    await debouncedWriteDb(() => get().db);
   },
 
   addSources: async (newSources: Source[]) => {
@@ -248,14 +259,38 @@ export const useAppStore = create<AppState>((set, get) => ({
     await dbService.writeDb(newDb);
   },
 
+  markSourceCited: async (id: string) => {
+    const { db } = get();
+    const updatedSources = db.sources.map(source => {
+      if (source.id !== id || source.notes?.includes('[cited]')) return source;
+      return { ...source, notes: `${source.notes ? `${source.notes}\n` : ''}[cited]` };
+    });
+    if (updatedSources.every((source, index) => source === db.sources[index])) return;
+    const newDb = { ...db, sources: updatedSources };
+    set({ db: newDb });
+    await dbService.writeDb(newDb);
+  },
+
   insertCitation: (citation: string) => set({ pendingCitation: citation }),
   clearPendingCitation: () => set({ pendingCitation: null }),
 
   triggerUndo: () => set(state => ({ undoTrigger: state.undoTrigger + 1 })),
   triggerRedo: () => set(state => ({ redoTrigger: state.redoTrigger + 1 })),
 
-  toggleLeftPanel: () => set(state => ({ leftPanelOpen: !state.leftPanelOpen })),
-  toggleRightPanel: () => set(state => ({ rightPanelOpen: !state.rightPanelOpen })),
+  toggleLeftPanel: () => set(state => {
+    const open = !state.leftPanelOpen;
+    return {
+      leftPanelOpen: open,
+      rightPanelOpen: open && window.innerWidth < 1150 ? false : state.rightPanelOpen,
+    };
+  }),
+  toggleRightPanel: () => set(state => {
+    const open = !state.rightPanelOpen;
+    return {
+      rightPanelOpen: open,
+      leftPanelOpen: open && window.innerWidth < 1150 ? false : state.leftPanelOpen,
+    };
+  }),
   
   toggleTheme: () => set(state => {
     const newTheme = state.theme === 'light' ? 'dark' : 'light';

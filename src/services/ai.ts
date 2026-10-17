@@ -483,7 +483,6 @@ export const aiService = {
               abstract: abstractClean || snippet,
               accessedAt: new Date().toISOString(),
               notes: '',
-              semanticMatch: `${Math.floor(91 + Math.random() * 8)}%`,
               tag: 'Peer-Reviewed'
             };
           });
