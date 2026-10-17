@@ -208,7 +208,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     const newDb = { ...get().db, documents: [...get().db.documents, newDoc] };
     await dbService.writeDb(newDb);
-    set({ db: newDb, activeDocumentId: newDoc.id });
+    set({ db: newDb, activeDocumentId: newDoc.id, currentView: 'workspace' });
     return newDoc;
   },
 

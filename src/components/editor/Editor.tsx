@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -42,6 +42,103 @@ export const Editor: React.FC = () => {
   const [showAiResultModal, setShowAiResultModal] = useState(false);
   const [aiActionType, setAiActionType] = useState<string>('');
   const selectedRange = useRef<{ from: number; to: number } | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const isPaginating = useRef(false);
+  const paginationTimeout = useRef<any>(null);
+
+  const updatePageInfo = useCallback((ed: any) => {
+    try {
+      if (!ed || !ed.state) return;
+      const { doc, selection } = ed.state;
+      let totalBreaks = 0;
+      let breaksBeforeCursor = 0;
+      const cursorPos = selection?.from ?? 0;
+
+      doc.descendants((node: any, pos: number) => {
+        if (node.type.name === 'pageBreak') {
+          totalBreaks++;
+          if (pos < cursorPos) {
+            breaksBeforeCursor++;
+          }
+        }
+      });
+
+      setTotalPages(Math.max(1, totalBreaks + 1));
+      setCurrentPage(Math.max(1, breaksBeforeCursor + 1));
+    } catch {
+      // Ignore if editor state not ready
+    }
+  }, []);
+
+  const checkAutoPagination = useCallback((ed: any) => {
+    if (!ed || isPaginating.current) return;
+
+    if (paginationTimeout.current) {
+      clearTimeout(paginationTimeout.current);
+    }
+
+    paginationTimeout.current = setTimeout(() => {
+      const editorDom = ed.view?.dom as HTMLElement;
+      if (!editorDom) return;
+
+      const children = Array.from(editorDom.children) as HTMLElement[];
+      if (children.length < 2) return;
+
+      // Available content height in px before breaking to next page (~A4 height minus margins)
+      const PAGE_CONTENT_HEIGHT = 920;
+
+      let pageStartY = children[0].offsetTop;
+      let targetNode: HTMLElement | null = null;
+
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i];
+
+        if (
+          el.getAttribute('data-type') === 'page-break' ||
+          el.classList.contains('paper-page-break')
+        ) {
+          pageStartY = el.offsetTop + el.offsetHeight;
+          continue;
+        }
+
+        const elBottom = el.offsetTop + el.offsetHeight;
+        const currentHeightOnPage = elBottom - pageStartY;
+
+        if (currentHeightOnPage > PAGE_CONTENT_HEIGHT) {
+          const isFirstOnPage = (el.offsetTop - pageStartY) < 40;
+          const prev = el.previousElementSibling;
+          const isPrevBreak =
+            prev &&
+            (prev.getAttribute('data-type') === 'page-break' ||
+              prev.classList.contains('paper-page-break'));
+
+          if (!isFirstOnPage && !isPrevBreak) {
+            targetNode = el;
+            break;
+          }
+        }
+      }
+
+      if (targetNode) {
+        try {
+          isPaginating.current = true;
+          const pos = ed.view.posAtDOM(targetNode, 0);
+          if (typeof pos === 'number' && pos >= 0) {
+            ed.chain().focus().insertContentAt(pos, { type: 'pageBreak' }).run();
+          }
+        } catch (err) {
+          console.warn('Auto-pagination could not insert page break:', err);
+        } finally {
+          setTimeout(() => {
+            isPaginating.current = false;
+            updatePageInfo(ed);
+          }, 150);
+        }
+      }
+    }, 250);
+  }, [updatePageInfo]);
 
   const handleExport = (format: 'md' | 'html' | 'txt' | 'tex') => {
     if (!activeDoc) return;
@@ -110,6 +207,8 @@ export const Editor: React.FC = () => {
       const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
 
       triggerEditorTick();
+      checkAutoPagination(editor);
+      updatePageInfo(editor);
 
       if (activeDocumentId) {
         updateDocumentContent(activeDocumentId, html, wordCount)
@@ -122,6 +221,7 @@ export const Editor: React.FC = () => {
     },
     onSelectionUpdate: ({ editor }) => {
       triggerEditorTick();
+      updatePageInfo(editor);
       const { from, to } = editor.state.selection;
       if (from !== to) {
         const text = editor.state.doc.textBetween(from, to, ' ');
@@ -151,16 +251,22 @@ export const Editor: React.FC = () => {
   useEffect(() => {
     if (editor) {
       setEditorInstance(editor);
+      checkAutoPagination(editor);
+      updatePageInfo(editor);
     }
     return () => setEditorInstance(null);
-  }, [editor, setEditorInstance]);
+  }, [editor, setEditorInstance, checkAutoPagination, updatePageInfo]);
 
   // Sync document content if switching active document
   useEffect(() => {
     if (editor && activeDoc && editor.getHTML() !== activeDoc.content) {
       editor.commands.setContent(activeDoc.content);
+      setTimeout(() => {
+        checkAutoPagination(editor);
+        updatePageInfo(editor);
+      }, 100);
     }
-  }, [activeDocumentId, editor]);
+  }, [activeDocumentId, editor, checkAutoPagination, updatePageInfo]);
 
   // Insert citation when user clicks "Cite +" on research desk
   useEffect(() => {
@@ -383,7 +489,7 @@ export const Editor: React.FC = () => {
       {/* Editor Canvas Scroll Area */}
       <div className="flex-1 overflow-y-auto px-4 py-8 flex justify-center bg-surface-container relative">
         {/* Physical Paper Sheet */}
-        <div className="w-full max-w-[800px] min-h-[980px] bg-surface-container-lowest paper-sheet rounded px-6 sm:px-10 lg:px-16 py-10 sm:py-14 relative border border-outline-variant">
+        <div className="w-full max-w-[800px] min-h-[1056px] bg-surface-container-lowest paper-sheet rounded px-6 sm:px-12 py-10 sm:py-14 relative border border-outline-variant overflow-hidden shadow-md">
           <div className="prose max-w-none text-on-surface font-body-paper text-body-paper leading-relaxed">
             <EditorContent editor={editor} />
           </div>
@@ -395,7 +501,7 @@ export const Editor: React.FC = () => {
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <span className="flex items-center gap-1 font-medium text-on-surface">
             <span className="material-symbols-outlined text-[13px] text-primary">description</span>
-            <span>Page 1 of 1</span>
+            <span>Page {currentPage} of {totalPages}</span>
           </span>
           <span className="hidden lg:inline text-outline-variant">•</span>
           <span className="hidden lg:flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">

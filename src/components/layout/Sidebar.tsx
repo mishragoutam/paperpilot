@@ -17,16 +17,16 @@ export const Sidebar: React.FC = () => {
   const [newDocTitle, setNewDocTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
-  const activeProject = db.projects.find(p => p.id === activeProjectId);
-  const allProjectDocs = db.documents.filter(d => d.projectId === activeProjectId);
+  const effectiveProjectId = activeProjectId || db.projects[0]?.id;
+  const activeProject = db.projects.find(p => p.id === effectiveProjectId);
+  const allProjectDocs = db.documents.filter(d => d.projectId === effectiveProjectId);
 
   const handleCreateDoc = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDocTitle.trim() || !activeProjectId || isCreating) return;
+    if (!newDocTitle.trim() || !effectiveProjectId || isCreating) return;
     setIsCreating(true);
     try {
-      const doc = await createDocument(activeProjectId, newDocTitle.trim());
-      // Explicitly set active document and navigate to workspace
+      const doc = await createDocument(effectiveProjectId, newDocTitle.trim());
       setActiveDocument(doc.id);
       setCurrentView('workspace');
       setNewDocTitle('');
@@ -74,9 +74,15 @@ export const Sidebar: React.FC = () => {
           <input
             autoFocus
             type="text"
-            placeholder="Page title (e.g. Introduction)"
+            placeholder="Page title (e.g. Methodology)"
             value={newDocTitle}
             onChange={e => setNewDocTitle(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') {
+                setCreatingDoc(false);
+                setNewDocTitle('');
+              }
+            }}
             className="w-full text-xs px-2 py-1.5 border border-primary rounded bg-surface text-on-surface focus:outline-none focus:ring-1 focus:ring-primary mb-2"
           />
           <div className="flex justify-end gap-1.5">
@@ -102,7 +108,17 @@ export const Sidebar: React.FC = () => {
       <div className="flex-1 overflow-y-auto py-1">
         <div className="px-3 py-1.5 flex items-center justify-between">
           <span className="text-[10px] font-semibold text-outline uppercase tracking-wider">Pages</span>
-          <span className="text-[10px] bg-surface-container px-1.5 py-0.5 rounded text-outline font-mono">{allProjectDocs.length}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] bg-surface-container px-1.5 py-0.5 rounded text-outline font-mono">{allProjectDocs.length}</span>
+            <button
+              onClick={() => { setNewDocTitle(''); setCreatingDoc(true); }}
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-surface-container text-primary text-[11px] font-medium transition-colors"
+              title="Add new page / section"
+            >
+              <span className="material-symbols-outlined text-[13px]">add</span>
+              <span>New</span>
+            </button>
+          </div>
         </div>
 
         {allProjectDocs.length === 0 ? (
@@ -156,6 +172,17 @@ export const Sidebar: React.FC = () => {
                 </div>
               );
             })}
+            {!creatingDoc && (
+              <div className="pt-1.5 pb-1 px-1">
+                <button
+                  onClick={() => { setNewDocTitle(''); setCreatingDoc(true); }}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded border border-dashed border-outline-variant hover:border-primary/50 hover:bg-primary/5 text-on-surface-variant hover:text-primary text-[11px] font-medium transition-all"
+                >
+                  <span className="material-symbols-outlined text-[13px]">add</span>
+                  <span>Add New Page</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 

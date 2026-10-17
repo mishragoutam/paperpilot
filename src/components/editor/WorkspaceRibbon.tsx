@@ -116,6 +116,12 @@ export const WorkspaceRibbon: React.FC<WorkspaceRibbonProps> = ({ editor, onExpo
       <ToolBtn onClick={() => editor?.chain().focus().toggleBlockquote().run()} title="Blockquote" icon="format_quote" active={editor?.isActive('blockquote') || false} />
       <ToolBtn onClick={() => editor?.chain().focus().toggleCode().run()} title="Inline Code" icon="code" active={editor?.isActive('code') || false} />
       <ToolBtn onClick={() => editor?.chain().focus().setHorizontalRule().run()} title="Horizontal Rule" icon="horizontal_rule" />
+      <ToolBtn
+        onClick={() => (editor as any)?.chain().focus().setPageBreak().run()}
+        title="Insert New Page / Page Break (Ctrl+Enter)"
+        icon="insert_page_break"
+        label="New Page"
+      />
 
       <Divider />
 
