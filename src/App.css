@@ -1,45 +1,11 @@
 /* PaperPilot - Application-specific styles */
 
 /* Workspace layout transitions */
-.workspace-main {
-  transition: padding-left 0.2s ease;
-}
-
 .workspace-main > section {
   min-width: 0;
 }
 
-@media (max-width: 1149px) {
-  .workspace-main {
-    position: relative;
-  }
-
-  .workspace-main > .panel-enter,
-  .workspace-main > .panel-enter-right {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    z-index: 30;
-    max-width: calc(100vw - 256px);
-    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.18);
-  }
-
-  .workspace-main > .panel-enter {
-    left: 0;
-    width: min(280px, calc(100vw - 256px));
-  }
-
-  .workspace-main > .panel-enter-right {
-    right: 0;
-    width: min(340px, calc(100vw - 256px));
-  }
-}
-
 @media (max-width: 680px) {
-  .app-content {
-    padding-left: 0 !important;
-  }
-
   .workspace-sidebar {
     display: none !important;
   }
@@ -135,21 +101,6 @@
   filter: drop-shadow(0 2px 4px rgba(67, 56, 202, 0.15));
 }
 
-/* Template card shimmer on hover */
-.template-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.05) 50%, transparent 60%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.template-card:hover::after {
-  opacity: 1;
-}
-
 /* Floating menu glass effect */
 .glass-panel {
   background: rgba(255, 255, 255, 0.92);
@@ -160,20 +111,4 @@
 .dark .glass-panel {
   background: rgba(17, 24, 39, 0.92);
   border: 1px solid rgba(30, 41, 59, 0.8);
-}
-
-/* Ribbon tab active indicator */
-.ribbon-tab-active {
-  position: relative;
-}
-
-.ribbon-tab-active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--color-primary);
-  border-radius: 1px 1px 0 0;
 }
